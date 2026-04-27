@@ -1,0 +1,1181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Battleship: Destroyer Command</title>
+<style>
+  html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    background: #04111d;
+    color: #e8f0ff;
+    font-family: "Segoe UI", Tahoma, sans-serif;
+    overflow: hidden;
+    user-select: none;
+  }
+  #wrap {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  canvas {
+    background: #0a2540;
+    display: block;
+    box-shadow: 0 0 40px rgba(0,0,0,0.7);
+  }
+  #hud {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    right: 10px;
+    display: flex;
+    justify-content: space-between;
+    pointer-events: none;
+    font-weight: 600;
+    text-shadow: 0 0 4px #000;
+  }
+  #hud .left, #hud .right {
+    background: rgba(4, 17, 29, 0.6);
+    padding: 8px 14px;
+    border-radius: 6px;
+    border: 1px solid #1c4a72;
+  }
+  .barWrap {
+    width: 160px;
+    height: 10px;
+    background: #1a2a3a;
+    border: 1px solid #2c4a6a;
+    border-radius: 4px;
+    margin-top: 4px;
+    overflow: hidden;
+  }
+  .bar {
+    height: 100%;
+    background: linear-gradient(90deg, #4ad27a, #b6f06f);
+    transition: width 0.15s;
+  }
+  .barRed { background: linear-gradient(90deg, #d24a4a, #f0a06f); }
+
+  #banner {
+    position: absolute;
+    top: 80px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(4,17,29,0.7);
+    border: 1px solid #ffd56a;
+    color: #ffd56a;
+    padding: 8px 18px;
+    border-radius: 6px;
+    font-weight: 600;
+    pointer-events: none;
+    display: none;
+  }
+  #banner.show { display: block; }
+
+  #overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(4,17,29,0.85);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    z-index: 5;
+  }
+  #overlay h1 {
+    margin: 0 0 6px;
+    font-size: 44px;
+    letter-spacing: 2px;
+    color: #ffd56a;
+    text-shadow: 0 0 10px #ff8a3a;
+  }
+  #overlay p { margin: 4px 0; color: #b8d0e8; }
+  button {
+    background: #1c4a72;
+    color: #fff;
+    border: 1px solid #4ab1ff;
+    padding: 10px 22px;
+    font-size: 16px;
+    border-radius: 6px;
+    cursor: pointer;
+    margin: 8px 4px;
+    font-weight: 600;
+    transition: all 0.15s;
+  }
+  button:hover { background: #2d6a9c; transform: translateY(-1px); }
+  button:disabled {
+    background: #243040;
+    color: #6a7a8a;
+    border-color: #324050;
+    cursor: not-allowed;
+    transform: none;
+  }
+
+  #shop {
+    position: absolute;
+    inset: 0;
+    background: rgba(4,17,29,0.92);
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 6;
+  }
+  #shop.show { display: flex; }
+  #shop h2 {
+    color: #ffd56a;
+    margin: 0 0 4px;
+    font-size: 30px;
+    letter-spacing: 1px;
+  }
+  #shop .sub { color: #b8d0e8; margin: 2px 0 14px; }
+  .shopGrid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(260px, 1fr));
+    gap: 10px;
+    width: min(740px, 92%);
+    max-height: 60vh;
+    overflow-y: auto;
+    padding: 4px;
+  }
+  .shopItem {
+    background: #0e2b44;
+    border: 1px solid #2d6a9c;
+    border-radius: 8px;
+    padding: 10px 12px;
+    text-align: left;
+  }
+  .shopItem h3 {
+    margin: 0 0 4px;
+    color: #b6f06f;
+    font-size: 15px;
+  }
+  .shopItem p {
+    margin: 2px 0;
+    font-size: 12px;
+    color: #b8d0e8;
+  }
+  .shopItem button { width: 100%; margin: 6px 0 0; padding: 6px 10px; font-size: 13px; }
+
+  .keyHint {
+    position: absolute;
+    bottom: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    color: #6a8aa8;
+    font-size: 12px;
+    background: rgba(4,17,29,0.6);
+    padding: 6px 12px;
+    border-radius: 4px;
+  }
+  .coin { color: #ffd56a; }
+
+  #portCompass {
+    position: absolute;
+    top: 50px;
+    right: 16px;
+    background: rgba(4,17,29,0.7);
+    border: 1px solid #2d6a9c;
+    color: #b8d0e8;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 13px;
+    pointer-events: none;
+    display: none;
+  }
+  #portCompass.show { display: block; }
+  #portCompass .arrow {
+    display: inline-block;
+    margin-right: 6px;
+    color: #ffd56a;
+    font-weight: bold;
+  }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <canvas id="game" width="960" height="600"></canvas>
+
+  <div id="hud" style="display:none;">
+    <div class="left">
+      Hull
+      <div class="barWrap"><div id="hullBar" class="bar barRed" style="width:100%"></div></div>
+      Reload
+      <div class="barWrap"><div id="reloadBar" class="bar" style="width:100%"></div></div>
+    </div>
+    <div class="right" style="text-align:right;">
+      Wave <span id="waveNum">1</span> &nbsp; Score <span id="score">0</span><br/>
+      <span class="coin">&#x25C9; <span id="coins">0</span> coins</span>
+    </div>
+  </div>
+
+  <div id="banner"></div>
+
+  <div id="portCompass"><span class="arrow">&#9650;</span> <span id="portDist">Port</span></div>
+
+  <div id="overlay">
+    <h1>BATTLESHIP</h1>
+    <p style="font-size:18px;color:#ffd56a;">Destroyer Command &mdash; 1942</p>
+    <p>You command a WWII destroyer. Sink enemy ships, return to port, and upgrade your fleet.</p>
+    <p style="margin-top:14px;"><b>WASD / Arrows</b> sail &nbsp; <b>Mouse</b> aim &nbsp; <b>Click / Space</b> fire &nbsp; <b>P</b> pause</p>
+    <p style="font-size:13px;color:#8aa6c4;">Sandbox mode: open ocean. Defeat the wave, then sail back to port to repair and resupply.</p>
+    <button id="startBtn">Set Sail</button>
+  </div>
+
+  <div id="shop">
+    <h2>Naval Yard &mdash; Port Royal</h2>
+    <p class="sub"><span class="coin">&#x25C9; <span id="shopCoins">0</span> coins</span> &nbsp; Wave <span id="shopWave">1</span> cleared! Repaired and resupplied.</p>
+    <div class="shopGrid" id="shopGrid"></div>
+    <button id="nextWaveBtn" style="margin-top:14px;">Set Sail &mdash; Engage Next Wave</button>
+  </div>
+
+  <div class="keyHint">WASD/Arrows move &middot; Mouse aim &middot; Click or Space fire &middot; P pause</div>
+</div>
+
+<script>
+(() => {
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+  const VIEW_W = canvas.width, VIEW_H = canvas.height;
+  const WORLD_W = 2400, WORLD_H = 1600;
+
+  // port zone — top-left of world
+  const PORT = { x: 0, y: 0, w: 760, h: 240 }; // land
+  const DOCK = { x: 60, y: 240, w: 640, h: 200 }; // water area where you "dock"
+
+  const overlay  = document.getElementById('overlay');
+  const startBtn = document.getElementById('startBtn');
+  const hud      = document.getElementById('hud');
+  const hullBar  = document.getElementById('hullBar');
+  const reloadBar = document.getElementById('reloadBar');
+  const waveNumEl = document.getElementById('waveNum');
+  const scoreEl  = document.getElementById('score');
+  const coinsEl  = document.getElementById('coins');
+  const shopEl   = document.getElementById('shop');
+  const shopCoins = document.getElementById('shopCoins');
+  const shopWave = document.getElementById('shopWave');
+  const shopGrid = document.getElementById('shopGrid');
+  const nextWaveBtn = document.getElementById('nextWaveBtn');
+  const banner   = document.getElementById('banner');
+  const portCompass = document.getElementById('portCompass');
+  const portDist = document.getElementById('portDist');
+
+  // ---- input ----
+  const keys = {};
+  let mouse = { x: 0, y: 0, sx: VIEW_W/2, sy: VIEW_H/2, down: false };
+  window.addEventListener('keydown', e => {
+    keys[e.key.toLowerCase()] = true;
+    if (e.key === ' ') e.preventDefault();
+    if (e.key.toLowerCase() === 'p' && state.running && !shopEl.classList.contains('show')) {
+      state.paused = !state.paused;
+    }
+  });
+  window.addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
+  canvas.addEventListener('mousemove', e => {
+    const r = canvas.getBoundingClientRect();
+    mouse.sx = (e.clientX - r.left) * (VIEW_W / r.width);
+    mouse.sy = (e.clientY - r.top)  * (VIEW_H / r.height);
+  });
+  canvas.addEventListener('mousedown', () => mouse.down = true);
+  canvas.addEventListener('mouseup',   () => mouse.down = false);
+  window.addEventListener('blur', () => mouse.down = false);
+
+  // ---- ship name pools ----
+  const ALLIED_NAMES = [
+    'USS Fletcher','USS O\'Bannon','USS Nicholas','USS Taylor','USS Hoel',
+    'USS Johnston','USS Heermann','USS Kidd','USS Sullivans','USS Laffey',
+    'HMS Hood','HMS Warspite','HMS Cossack','HMS Kelly','HMS Jervis',
+  ];
+  const ENEMY_NAMES = {
+    patrol: [
+      'IJN Chidori','IJN Hayabusa','IJN Otori','IJN Tomozuru',
+      'KMS Iltis','KMS Wolf','KMS Greif','KMS Falke','KMS Albatros',
+    ],
+    destroyer: [
+      'IJN Akizuki','IJN Yukikaze','IJN Shimakaze','IJN Kagero',
+      'IJN Asashio','IJN Fubuki','IJN Hatsuzuki',
+      'KMS Z-23','KMS Z-31','KMS Z-39',
+    ],
+    cruiser: [
+      'IJN Mogami','IJN Tone','IJN Atago','IJN Takao','IJN Furutaka','IJN Myoko',
+      'KMS Prinz Eugen','KMS Admiral Hipper','KMS Bl\u00FCcher',
+    ],
+    battleship: [
+      'IJN Yamato','IJN Musashi','IJN Nagato','IJN Mutsu','IJN Kongo','IJN Haruna',
+      'KMS Bismarck','KMS Tirpitz','KMS Scharnhorst','KMS Gneisenau',
+    ],
+  };
+  function makeNamePool(arr) {
+    const pool = arr.slice();
+    return () => {
+      if (pool.length === 0) pool.push(...arr);
+      const i = Math.floor(Math.random() * pool.length);
+      return pool.splice(i, 1)[0];
+    };
+  }
+  const allyPool = makeNamePool(ALLIED_NAMES);
+  const enemyPools = {
+    patrol: makeNamePool(ENEMY_NAMES.patrol),
+    destroyer: makeNamePool(ENEMY_NAMES.destroyer),
+    cruiser: makeNamePool(ENEMY_NAMES.cruiser),
+    battleship: makeNamePool(ENEMY_NAMES.battleship),
+  };
+
+  // ---- game state ----
+  const state = {
+    running: false,
+    paused: false,
+    phase: 'port',   // 'port' | 'wave' | 'returning'
+    wave: 1,
+    score: 0,
+    coins: 0,
+    spawnQueue: null,
+    spawnCooldown: 0,
+  };
+
+  // upgrades — persistent fleet
+  const up = {
+    hullMax:    100,
+    speed:      2.4,
+    fireRate:   0.55,
+    damage:     20,
+    bulletSpd:  6.5,
+    range:      520,
+    escorts:    0,
+    armor:      0,
+  };
+
+  let player, enemies, bullets, particles, escorts, pickups;
+  const camera = { x: 0, y: 0 };
+
+  function reset(fullReset) {
+    if (fullReset) {
+      state.wave = 1;
+      state.score = 0;
+      state.coins = 0;
+      state.phase = 'port';
+      Object.assign(up, {
+        hullMax: 100, speed: 2.4, fireRate: 0.55,
+        damage: 20, bulletSpd: 6.5, range: 520,
+        escorts: 0, armor: 0,
+      });
+    }
+    // start docked at port
+    player = makeShip(DOCK.x + DOCK.w*0.5, DOCK.y + DOCK.h*0.6, 'player');
+    enemies = []; bullets = []; particles = []; pickups = [];
+    escorts = [];
+    rebuildEscorts();
+    camera.x = clamp(player.x - VIEW_W/2, 0, WORLD_W - VIEW_W);
+    camera.y = clamp(player.y - VIEW_H/2, 0, WORLD_H - VIEW_H);
+  }
+
+  function rebuildEscorts() {
+    const oldNames = escorts.map(e => e.name);
+    escorts = [];
+    for (let i = 0; i < up.escorts; i++) {
+      escorts.push({
+        x: player.x, y: player.y, ang: 0,
+        cooldown: 0,
+        name: oldNames[i] || allyPool(),
+      });
+    }
+  }
+  function escortOffset(i) {
+    const offsets = [
+      { dx: -50, dy:  40 },
+      { dx:  50, dy:  40 },
+      { dx:   0, dy:  80 },
+    ];
+    return offsets[i] || { dx: 0, dy: 60 };
+  }
+
+  function makeShip(x, y, type) {
+    if (type === 'player') {
+      return {
+        x, y, ang: -Math.PI/2,
+        vx: 0, vy: 0,
+        hp: up.hullMax, hpMax: up.hullMax,
+        cooldown: 0,
+        type: 'player',
+        len: 56, wid: 16,
+        name: 'USS Fletcher',
+      };
+    }
+    return null;
+  }
+
+  function spawnEnemy(kind) {
+    // spawn far from port — south or east edge mostly
+    let x, y, tries = 0;
+    do {
+      const side = Math.floor(Math.random() * 3);
+      if (side === 0)      { x = Math.random()*WORLD_W; y = WORLD_H + 40; } // south
+      else if (side === 1) { x = WORLD_W + 40; y = Math.random()*WORLD_H; } // east
+      else                 { x = -40; y = 400 + Math.random()*(WORLD_H-400); } // west, below port
+      tries++;
+    } while (tries < 6 && pointInPort(x, y));
+
+    const types = {
+      patrol:    { hp: 30,  len: 40, wid: 12, speed: 1.4, dmg: 10, fire: 1.4, range: 320, color: '#7e8a99', barrel: 1, value: 8,  score: 50 },
+      destroyer: { hp: 70,  len: 56, wid: 16, speed: 1.1, dmg: 18, fire: 1.0, range: 380, color: '#5a7a99', barrel: 2, value: 18, score: 120 },
+      cruiser:   { hp: 130, len: 70, wid: 20, speed: 0.85,dmg: 24, fire: 0.7, range: 460, color: '#5a5a99', barrel: 2, value: 35, score: 240 },
+      battleship:{ hp: 240, len: 90, wid: 26, speed: 0.65,dmg: 32, fire: 0.55,range: 520, color: '#6a4a4a', barrel: 3, value: 80, score: 600 },
+    };
+    const t = types[kind];
+    enemies.push({
+      x, y, ang: Math.atan2(player.y - y, player.x - x),
+      vx: 0, vy: 0,
+      hp: t.hp, hpMax: t.hp,
+      len: t.len, wid: t.wid,
+      speed: t.speed, dmg: t.dmg,
+      fire: t.fire, fireCd: Math.random()*1.5,
+      range: t.range, color: t.color,
+      barrel: t.barrel, value: t.value, score: t.score,
+      kind,
+      name: enemyPools[kind](),
+    });
+  }
+
+  function startWave() {
+    state.phase = 'wave';
+    const w = state.wave;
+    const composition = [];
+    composition.push(...Array(2 + Math.floor(w * 1.3)).fill('patrol'));
+    if (w >= 2) composition.push(...Array(Math.floor(w * 0.7)).fill('destroyer'));
+    if (w >= 4) composition.push(...Array(Math.floor((w-3) * 0.6)).fill('cruiser'));
+    if (w >= 6 && w % 2 === 0) composition.push('battleship');
+    if (w >= 8) composition.push('battleship');
+    state.spawnQueue = composition;
+    state.spawnCooldown = 1.2;
+    showBanner(`Wave ${w} &mdash; ${composition.length} hostile contacts inbound`, 2500);
+  }
+
+  function endWave() {
+    state.phase = 'returning';
+    showBanner('Wave cleared! Return to port for repairs and resupply.', 4000);
+  }
+
+  let bannerTimer = null;
+  function showBanner(html, ms) {
+    banner.innerHTML = html;
+    banner.classList.add('show');
+    if (bannerTimer) clearTimeout(bannerTimer);
+    if (ms) bannerTimer = setTimeout(() => banner.classList.remove('show'), ms);
+  }
+  function hideBanner() {
+    banner.classList.remove('show');
+    if (bannerTimer) { clearTimeout(bannerTimer); bannerTimer = null; }
+  }
+
+  function pointInPort(x, y) {
+    return x < PORT.w && y < PORT.h;
+  }
+  function pointInDock(x, y) {
+    return x > DOCK.x && x < DOCK.x + DOCK.w && y > DOCK.y && y < DOCK.y + DOCK.h;
+  }
+
+  // ---- shop ----
+  const shopItems = [
+    { id: 'hull',    name: 'Reinforced Hull',  desc: '+30 max hull',         cost: w => 40 + w*15,  apply: () => { up.hullMax += 30; player.hpMax = up.hullMax; player.hp += 30; } },
+    { id: 'speed',   name: 'Tuned Engines',    desc: '+0.5 sail speed',      cost: w => 35 + w*12,  apply: () => { up.speed += 0.5; } },
+    { id: 'fire',    name: 'Faster Loaders',   desc: '+0.25 fire rate',      cost: w => 50 + w*18,  apply: () => { up.fireRate += 0.25; } },
+    { id: 'dmg',     name: 'Heavier Shells',   desc: '+10 damage',           cost: w => 45 + w*16,  apply: () => { up.damage += 10; } },
+    { id: 'bspd',    name: 'Higher Velocity',  desc: '+1.5 shell speed',     cost: w => 30 + w*10,  apply: () => { up.bulletSpd += 1.5; } },
+    { id: 'range',   name: 'Long Range Optics',desc: '+80 range',            cost: w => 30 + w*12,  apply: () => { up.range += 80; } },
+    { id: 'armor',   name: 'Belt Armor',       desc: '+3 damage reduction',  cost: w => 60 + w*20,  apply: () => { up.armor += 3; }, max: 5 },
+    { id: 'escort',  name: 'Escort Destroyer', desc: 'Adds 1 ally ship',     cost: w => 120 + w*40, apply: () => { up.escorts++; rebuildEscorts(); }, max: 3 },
+    { id: 'repair',  name: 'Full Repair',      desc: 'Restore hull to max',  cost: w => 25 + w*8,   apply: () => { player.hp = player.hpMax; }, repeatable: true },
+  ];
+  const purchaseCounts = {};
+
+  function openShop() {
+    shopCoins.textContent = state.coins;
+    shopWave.textContent = state.wave;
+    shopGrid.innerHTML = '';
+    shopItems.forEach(item => {
+      const bought = purchaseCounts[item.id] || 0;
+      const max = item.max ?? Infinity;
+      const cost = item.cost(state.wave) + (item.repeatable ? 0 : bought * 10);
+      const div = document.createElement('div');
+      div.className = 'shopItem';
+      div.innerHTML = `
+        <h3>${item.name}</h3>
+        <p>${item.desc}</p>
+        <p>Cost: <span class="coin">&#x25C9; ${cost}</span> ${max!==Infinity ? `&middot; ${bought}/${max}` : ''}</p>
+      `;
+      const btn = document.createElement('button');
+      btn.textContent = bought >= max ? 'Maxed' : (state.coins < cost ? 'Not enough coins' : 'Purchase');
+      btn.disabled = bought >= max || state.coins < cost;
+      btn.onclick = () => {
+        if (state.coins < cost || bought >= max) return;
+        state.coins -= cost;
+        if (!item.repeatable) purchaseCounts[item.id] = bought + 1;
+        item.apply();
+        openShop();
+      };
+      div.appendChild(btn);
+      shopGrid.appendChild(div);
+    });
+    shopEl.classList.add('show');
+  }
+  function closeShopAndSetSail() {
+    shopEl.classList.remove('show');
+    state.wave++;
+    startWave();
+  }
+  nextWaveBtn.onclick = closeShopAndSetSail;
+
+  // ---- helpers ----
+  function angDiff(a, b) {
+    let d = a - b;
+    while (d > Math.PI) d -= Math.PI*2;
+    while (d < -Math.PI) d += Math.PI*2;
+    return d;
+  }
+  function dist2(a, b) { const dx = a.x-b.x, dy = a.y-b.y; return dx*dx+dy*dy; }
+  function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+
+  function spawnExplosion(x, y, color, big) {
+    const n = big ? 30 : 14;
+    for (let i = 0; i < n; i++) {
+      const a = Math.random()*Math.PI*2;
+      const s = (big ? 3 : 2) + Math.random()*3;
+      particles.push({
+        x, y,
+        vx: Math.cos(a)*s, vy: Math.sin(a)*s,
+        life: big ? 50 : 30, max: big ? 50 : 30,
+        color, size: 2 + Math.random()*3,
+      });
+    }
+  }
+  function spawnSplash(x, y) {
+    for (let i = 0; i < 6; i++) {
+      const a = Math.random()*Math.PI*2;
+      const s = 0.8 + Math.random()*1.2;
+      particles.push({
+        x, y, vx: Math.cos(a)*s, vy: Math.sin(a)*s,
+        life: 20, max: 20, color: '#a8d4f0', size: 2,
+      });
+    }
+  }
+  function spawnWake(ship) {
+    const back = ship.ang + Math.PI;
+    const bx = ship.x + Math.cos(back)*ship.len*0.45;
+    const by = ship.y + Math.sin(back)*ship.len*0.45;
+    particles.push({
+      x: bx + (Math.random()-0.5)*4, y: by + (Math.random()-0.5)*4,
+      vx: Math.cos(back)*0.5, vy: Math.sin(back)*0.5,
+      life: 40, max: 40, color: '#ffffff', size: 3,
+    });
+  }
+
+  function fireGun(shooter, owner, baseDmg, baseSpd, range) {
+    const ang = shooter.aim ?? shooter.ang;
+    bullets.push({
+      x: shooter.x + Math.cos(ang)*shooter.len*0.5,
+      y: shooter.y + Math.sin(ang)*shooter.len*0.5,
+      vx: Math.cos(ang)*baseSpd, vy: Math.sin(ang)*baseSpd,
+      life: range / baseSpd,
+      dmg: baseDmg, owner, color: owner === 'player' ? '#ffe26a' : '#ff6a6a',
+    });
+  }
+
+  // ---- main loop ----
+  let last = performance.now();
+  function loop(now) {
+    const dt = Math.min(0.05, (now - last) / 1000);
+    last = now;
+    if (state.running && !state.paused) update(dt);
+    render();
+    requestAnimationFrame(loop);
+  }
+
+  function update(dt) {
+    // wave spawning
+    if (state.phase === 'wave' && state.spawnQueue && state.spawnQueue.length) {
+      state.spawnCooldown -= dt;
+      if (state.spawnCooldown <= 0) {
+        spawnEnemy(state.spawnQueue.shift());
+        state.spawnCooldown = 0.8 + Math.random()*0.7;
+      }
+    }
+    if (state.phase === 'wave' && state.spawnQueue && state.spawnQueue.length === 0 && enemies.length === 0) {
+      endWave();
+    }
+
+    updatePlayer(dt);
+    updateEscorts(dt);
+    updateEnemies(dt);
+    updateBullets(dt);
+    updatePickups(dt);
+    updateParticles(dt);
+
+    // camera follows
+    const targetCx = clamp(player.x - VIEW_W/2, 0, WORLD_W - VIEW_W);
+    const targetCy = clamp(player.y - VIEW_H/2, 0, WORLD_H - VIEW_H);
+    camera.x += (targetCx - camera.x) * 0.12;
+    camera.y += (targetCy - camera.y) * 0.12;
+
+    // world->screen mouse aim
+    mouse.x = mouse.sx + camera.x;
+    mouse.y = mouse.sy + camera.y;
+
+    // returning -> port detection
+    if (state.phase === 'returning' && pointInDock(player.x, player.y)) {
+      state.phase = 'port';
+      hideBanner();
+      openShop();
+    }
+
+    // hud
+    hullBar.style.width = clamp((player.hp / player.hpMax) * 100, 0, 100) + '%';
+    reloadBar.style.width = clamp((1 - player.cooldown) * 100, 0, 100) + '%';
+    waveNumEl.textContent = state.wave;
+    scoreEl.textContent = state.score;
+    coinsEl.textContent = state.coins;
+
+    // port compass
+    if (state.phase === 'returning') {
+      const dx = (DOCK.x + DOCK.w/2) - player.x;
+      const dy = (DOCK.y + DOCK.h/2) - player.y;
+      const d = Math.hypot(dx, dy);
+      portDist.textContent = `Port ${Math.round(d)}m`;
+      const ang = Math.atan2(dy, dx) * 180 / Math.PI + 90;
+      portCompass.querySelector('.arrow').style.transform = `rotate(${ang}deg)`;
+      portCompass.classList.add('show');
+    } else {
+      portCompass.classList.remove('show');
+    }
+
+    if (player.hp <= 0) gameOver();
+  }
+
+  function updatePlayer(dt) {
+    let ax = 0, ay = 0;
+    if (keys['w'] || keys['arrowup'])    ay -= 1;
+    if (keys['s'] || keys['arrowdown'])  ay += 1;
+    if (keys['a'] || keys['arrowleft'])  ax -= 1;
+    if (keys['d'] || keys['arrowright']) ax += 1;
+    const mag = Math.hypot(ax, ay);
+    if (mag > 0) {
+      ax /= mag; ay /= mag;
+      player.vx += ax * up.speed * 0.4;
+      player.vy += ay * up.speed * 0.4;
+      const moveAng = Math.atan2(ay, ax);
+      const d = angDiff(moveAng, player.ang);
+      player.ang += clamp(d, -3*dt, 3*dt);
+    }
+    player.vx *= 0.94;
+    player.vy *= 0.94;
+    const sp = Math.hypot(player.vx, player.vy);
+    if (sp > up.speed) { player.vx *= up.speed/sp; player.vy *= up.speed/sp; }
+    let nx = player.x + player.vx;
+    let ny = player.y + player.vy;
+    // block from running over land
+    if (pointInPort(nx, ny)) {
+      // push out: choose nearest edge
+      if (ny > PORT.h - 4) ny = PORT.h + 4;
+      else if (nx > PORT.w - 4) nx = PORT.w + 4;
+    }
+    player.x = clamp(nx, 30, WORLD_W-30);
+    player.y = clamp(ny, 30, WORLD_H-30);
+
+    player.aim = Math.atan2(mouse.y - player.y, mouse.x - player.x);
+
+    if (sp > 0.3 && Math.random() < 0.7) spawnWake(player);
+
+    player.cooldown = Math.max(0, player.cooldown - dt * up.fireRate);
+    // no firing while at port
+    if (state.phase !== 'port' && (mouse.down || keys[' ']) && player.cooldown <= 0) {
+      fireGun(player, 'player', up.damage, up.bulletSpd, up.range);
+      player.cooldown = 1;
+    }
+  }
+
+  function updateEscorts(dt) {
+    for (let i = 0; i < escorts.length; i++) {
+      const e = escorts[i];
+      const off = escortOffset(i);
+      const cos = Math.cos(player.ang), sin = Math.sin(player.ang);
+      const tx = player.x + cos * (-off.dy) + (-sin) * off.dx;
+      const ty = player.y + sin * (-off.dy) + (cos)  * off.dx;
+      const dx = tx - e.x, dy = ty - e.y;
+      const d = Math.hypot(dx, dy);
+      const speed = up.speed * 0.95;
+      if (d > 1) {
+        e.x += (dx / d) * Math.min(speed, d * 0.1);
+        e.y += (dy / d) * Math.min(speed, d * 0.1);
+      }
+      e.cooldown = Math.max(0, e.cooldown - dt);
+      let best = null, bd = (up.range * 0.85) ** 2;
+      for (const en of enemies) {
+        const dd = dist2(e, en);
+        if (dd < bd) { bd = dd; best = en; }
+      }
+      if (best && state.phase === 'wave') {
+        const ang = Math.atan2(best.y - e.y, best.x - e.x);
+        e.ang = ang;
+        if (e.cooldown <= 0) {
+          fireGun({ x: e.x, y: e.y, ang: ang, len: 40, aim: ang }, 'player', up.damage * 0.6, up.bulletSpd, up.range * 0.85);
+          e.cooldown = 1.2 / up.fireRate;
+        }
+      } else {
+        e.ang += angDiff(player.ang, e.ang) * 0.1;
+      }
+      if (Math.random() < 0.4) spawnWake({ x: e.x, y: e.y, ang: e.ang, len: 40 });
+    }
+  }
+
+  function updateEnemies(dt) {
+    for (const en of enemies) {
+      const dx = player.x - en.x, dy = player.y - en.y;
+      const d = Math.hypot(dx, dy);
+      const desired = en.range * 0.7;
+      let mvx = dx / (d || 1), mvy = dy / (d || 1);
+      if (d < desired) {
+        const tx = -mvy, ty = mvx;
+        mvx = tx; mvy = ty;
+      }
+      en.vx += mvx * en.speed * 0.05;
+      en.vy += mvy * en.speed * 0.05;
+      en.vx *= 0.95; en.vy *= 0.95;
+      const sp = Math.hypot(en.vx, en.vy);
+      if (sp > en.speed) { en.vx *= en.speed/sp; en.vy *= en.speed/sp; }
+      en.x += en.vx; en.y += en.vy;
+
+      const targetAng = Math.atan2(dy, dx);
+      const diff = angDiff(targetAng, en.ang);
+      en.ang += clamp(diff, -1.5*dt, 1.5*dt);
+
+      if (Math.random() < 0.35) spawnWake(en);
+
+      en.fireCd -= dt * en.fire;
+      if (en.fireCd <= 0 && d < en.range) {
+        const aim = targetAng + (Math.random()-0.5)*0.08;
+        fireGun({ x: en.x, y: en.y, ang: en.ang, len: en.len, aim }, 'enemy', en.dmg, 4.5, en.range + 40);
+        en.fireCd = 1;
+      }
+
+      if (d < (en.len + player.len)*0.3) {
+        applyDamageToPlayer(0.5);
+        en.hp -= 1;
+      }
+    }
+    for (let i = enemies.length - 1; i >= 0; i--) {
+      if (enemies[i].hp <= 0) {
+        const en = enemies[i];
+        spawnExplosion(en.x, en.y, '#ffae3a', en.kind === 'battleship' || en.kind === 'cruiser');
+        state.score += en.score;
+        const drops = Math.max(1, Math.round(en.value / 6));
+        for (let k = 0; k < drops; k++) {
+          const a = Math.random()*Math.PI*2;
+          pickups.push({
+            x: en.x + Math.cos(a)*8, y: en.y + Math.sin(a)*8,
+            vx: Math.cos(a)*1.5, vy: Math.sin(a)*1.5,
+            life: 18, value: Math.ceil(en.value / drops),
+          });
+        }
+        enemies.splice(i, 1);
+      }
+    }
+  }
+
+  function applyDamageToPlayer(dmg) {
+    const reduced = Math.max(1, dmg - up.armor);
+    player.hp -= reduced;
+  }
+
+  function updateBullets(dt) {
+    for (const b of bullets) {
+      b.x += b.vx; b.y += b.vy;
+      b.life -= 1;
+      if (b.x < -20 || b.y < -20 || b.x > WORLD_W+20 || b.y > WORLD_H+20) b.life = 0;
+    }
+    for (const b of bullets) {
+      if (b.life <= 0) continue;
+      if (b.owner === 'player') {
+        for (const en of enemies) {
+          const r = (en.len + en.wid)*0.25;
+          if (dist2(b, en) < r*r) {
+            en.hp -= b.dmg;
+            spawnSplash(b.x, b.y);
+            b.life = 0;
+            break;
+          }
+        }
+      } else {
+        const r = (player.len + player.wid)*0.25;
+        if (dist2(b, player) < r*r) {
+          applyDamageToPlayer(b.dmg);
+          spawnSplash(b.x, b.y);
+          b.life = 0;
+        }
+      }
+    }
+    for (let i = bullets.length-1; i >= 0; i--) if (bullets[i].life <= 0) bullets.splice(i,1);
+  }
+
+  function updatePickups(dt) {
+    for (const p of pickups) {
+      p.vx *= 0.95; p.vy *= 0.95;
+      p.x += p.vx; p.y += p.vy;
+      const dx = player.x - p.x, dy = player.y - p.y;
+      const d = Math.hypot(dx, dy);
+      if (d < 100) { p.vx += (dx/d) * 0.6; p.vy += (dy/d) * 0.6; }
+      if (d < 22) {
+        state.coins += p.value;
+        p.life = 0;
+        for (let k = 0; k < 4; k++) {
+          particles.push({
+            x: p.x, y: p.y,
+            vx: (Math.random()-0.5)*2, vy: (Math.random()-0.5)*2,
+            life: 18, max: 18, color: '#ffd56a', size: 2,
+          });
+        }
+      }
+      p.life -= dt;
+    }
+    for (let i = pickups.length-1; i >= 0; i--) if (pickups[i].life <= 0) pickups.splice(i,1);
+  }
+
+  function updateParticles(dt) {
+    for (const p of particles) {
+      p.x += p.vx; p.y += p.vy;
+      p.vx *= 0.95; p.vy *= 0.95;
+      p.life -= 1;
+    }
+    for (let i = particles.length-1; i >= 0; i--) if (particles[i].life <= 0) particles.splice(i,1);
+  }
+
+  // ---- render ----
+  let seaT = 0;
+  function render() {
+    seaT += 0.5;
+    drawSeaScreen();
+    if (!state.running) return;
+
+    ctx.save();
+    ctx.translate(-camera.x, -camera.y);
+
+    drawIslands();
+    drawPort();
+    drawMinimapMarkers();
+
+    for (const p of pickups) drawCoin(p.x, p.y);
+    for (const p of particles) drawParticle(p);
+
+    for (const e of escorts) drawShip(e.x, e.y, e.ang, '#4ab1ff', 40, 12, 1, 1, false, false, e.name);
+    drawShip(player.x, player.y, player.ang, '#bdd6ee', player.len, player.wid, 2, 1, true, false, player.name);
+    for (const en of enemies) drawShip(en.x, en.y, en.ang, en.color, en.len, en.wid, en.barrel, en.hp / en.hpMax, false, true, en.name);
+
+    for (const b of bullets) {
+      ctx.fillStyle = b.color;
+      ctx.beginPath();
+      ctx.arc(b.x, b.y, 2.6, 0, Math.PI*2);
+      ctx.fill();
+    }
+
+    if (state.running && !state.paused) {
+      ctx.strokeStyle = 'rgba(255, 213, 106, 0.5)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.arc(mouse.x, mouse.y, 10, 0, Math.PI*2);
+      ctx.moveTo(mouse.x - 14, mouse.y); ctx.lineTo(mouse.x - 6, mouse.y);
+      ctx.moveTo(mouse.x + 6, mouse.y);  ctx.lineTo(mouse.x + 14, mouse.y);
+      ctx.moveTo(mouse.x, mouse.y - 14); ctx.lineTo(mouse.x, mouse.y - 6);
+      ctx.moveTo(mouse.x, mouse.y + 6);  ctx.lineTo(mouse.x, mouse.y + 14);
+      ctx.stroke();
+    }
+
+    ctx.restore();
+
+    drawMinimap();
+
+    if (state.paused && !shopEl.classList.contains('show')) {
+      ctx.fillStyle = 'rgba(4,17,29,0.55)';
+      ctx.fillRect(0,0,VIEW_W,VIEW_H);
+      ctx.fillStyle = '#ffd56a';
+      ctx.font = 'bold 36px Segoe UI';
+      ctx.textAlign = 'center';
+      ctx.fillText('PAUSED', VIEW_W/2, VIEW_H/2);
+      ctx.font = '14px Segoe UI';
+      ctx.fillStyle = '#b8d0e8';
+      ctx.fillText('Press P to resume', VIEW_W/2, VIEW_H/2 + 28);
+    }
+  }
+
+  function drawSeaScreen() {
+    const g = ctx.createLinearGradient(0,0,0,VIEW_H);
+    g.addColorStop(0, '#0c2a4a');
+    g.addColorStop(1, '#072037');
+    ctx.fillStyle = g;
+    ctx.fillRect(0,0,VIEW_W,VIEW_H);
+    ctx.strokeStyle = 'rgba(120, 170, 220, 0.06)';
+    ctx.lineWidth = 1;
+    for (let y = 0; y < VIEW_H; y += 14) {
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      const wy = y + camera.y;
+      for (let x = 0; x <= VIEW_W; x += 30) {
+        const wx = x + camera.x;
+        ctx.lineTo(x, y + Math.sin((wx + wy + seaT)*0.04) * 4);
+      }
+      ctx.stroke();
+    }
+  }
+
+  // simple decorative islands in the open ocean
+  const islands = [
+    { x: 1500, y:  600, r: 90 },
+    { x:  900, y: 1100, r: 120 },
+    { x: 2100, y: 1300, r: 80 },
+    { x:  300, y: 1000, r: 70 },
+    { x: 1800, y:  300, r: 60 },
+  ];
+  function drawIslands() {
+    for (const isl of islands) {
+      // shadow
+      ctx.fillStyle = 'rgba(0,0,0,0.3)';
+      ctx.beginPath(); ctx.ellipse(isl.x+4, isl.y+6, isl.r*1.05, isl.r*0.7, 0, 0, Math.PI*2); ctx.fill();
+      // sand
+      ctx.fillStyle = '#d8c074';
+      ctx.beginPath(); ctx.ellipse(isl.x, isl.y, isl.r, isl.r*0.65, 0, 0, Math.PI*2); ctx.fill();
+      // grass
+      ctx.fillStyle = '#5d8a3f';
+      ctx.beginPath(); ctx.ellipse(isl.x, isl.y-2, isl.r*0.75, isl.r*0.45, 0, 0, Math.PI*2); ctx.fill();
+      // a tiny palm
+      ctx.fillStyle = '#3d2a18';
+      ctx.fillRect(isl.x-2, isl.y-isl.r*0.4, 4, isl.r*0.35);
+      ctx.fillStyle = '#3a8a3a';
+      ctx.beginPath(); ctx.arc(isl.x, isl.y - isl.r*0.45, 12, 0, Math.PI*2); ctx.fill();
+    }
+  }
+
+  function drawPort() {
+    // land
+    ctx.fillStyle = '#6b7c4a';
+    ctx.fillRect(PORT.x, PORT.y, PORT.w, PORT.h);
+    // sand strip along shore
+    ctx.fillStyle = '#d8c074';
+    ctx.fillRect(PORT.x, PORT.y + PORT.h - 12, PORT.w, 12);
+    // grass tufts texture
+    ctx.fillStyle = '#5a6b3a';
+    for (let i = 0; i < 40; i++) {
+      const gx = (i*73 + 41) % PORT.w;
+      const gy = (i*59 + 23) % (PORT.h - 18);
+      ctx.fillRect(PORT.x + gx, PORT.y + gy, 6, 3);
+    }
+    // warehouse buildings
+    drawBuilding(80, 60, 130, 70, '#7a4a3a', '#5a3528');
+    drawBuilding(240, 40, 100, 90, '#4a5a7a', '#2c3a55');
+    drawBuilding(370, 70, 160, 80, '#7a6a3a', '#5a4828');
+    drawBuilding(560, 40, 120, 100, '#5a5a5a', '#3a3a3a');
+    // crane
+    ctx.fillStyle = '#2a2a2a';
+    ctx.fillRect(220, 145, 8, 70);
+    ctx.fillRect(190, 145, 80, 8);
+    ctx.fillStyle = '#ffd56a';
+    ctx.fillRect(186, 142, 8, 14);
+    // flagpole + flag (US-ish stripes)
+    ctx.fillStyle = '#cccccc';
+    ctx.fillRect(540, 30, 3, 100);
+    ctx.fillStyle = '#c83a3a';
+    ctx.fillRect(543, 30, 28, 6);
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(543, 36, 28, 6);
+    ctx.fillStyle = '#3a4a99';
+    ctx.fillRect(543, 42, 14, 8);
+    // piers extending down into water
+    drawPier(150, PORT.y + PORT.h, 18, 90);
+    drawPier(330, PORT.y + PORT.h, 18, 90);
+    drawPier(530, PORT.y + PORT.h, 18, 90);
+    // dock zone label water
+    ctx.fillStyle = 'rgba(255, 213, 106, 0.07)';
+    ctx.fillRect(DOCK.x, DOCK.y, DOCK.w, DOCK.h);
+    // "PORT ROYAL" text on land
+    ctx.fillStyle = '#1c2a1c';
+    ctx.font = 'bold 16px Segoe UI';
+    ctx.textAlign = 'center';
+    ctx.fillText('PORT ROYAL', PORT.x + PORT.w/2, 26);
+    // a docked friendly ship (decoration)
+    drawShip(420, 280, -Math.PI/2, '#aabbcc', 50, 14, 1, 1, false, false, 'USS Liberty');
+  }
+
+  function drawBuilding(x, y, w, h, wall, roof) {
+    ctx.fillStyle = wall; ctx.fillRect(x, y, w, h);
+    ctx.fillStyle = roof; ctx.fillRect(x-3, y-6, w+6, 8);
+    // windows
+    ctx.fillStyle = '#e8d56a';
+    for (let wx = x + 10; wx < x + w - 10; wx += 18) {
+      for (let wy = y + 14; wy < y + h - 10; wy += 22) {
+        ctx.fillRect(wx, wy, 6, 8);
+      }
+    }
+  }
+  function drawPier(x, y, w, h) {
+    ctx.fillStyle = '#6a4a2a';
+    ctx.fillRect(x - w/2, y, w, h);
+    ctx.fillStyle = '#4a2e18';
+    for (let py = y + 8; py < y + h; py += 14) {
+      ctx.fillRect(x - w/2 - 4, py, w + 8, 3);
+    }
+  }
+
+  function drawShip(x, y, ang, color, len, wid, barrels, hpFrac, isPlayer, isEnemy, name) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(ang);
+    ctx.fillStyle = color;
+    ctx.strokeStyle = '#0a1820';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo( len*0.5, 0);
+    ctx.lineTo( len*0.3,  wid*0.5);
+    ctx.lineTo(-len*0.45, wid*0.5);
+    ctx.lineTo(-len*0.5,  0);
+    ctx.lineTo(-len*0.45,-wid*0.5);
+    ctx.lineTo( len*0.3, -wid*0.5);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(0,0,0,0.18)';
+    ctx.fillRect(-len*0.45, -wid*0.18, len*0.75, wid*0.36);
+    ctx.fillStyle = '#3a4a5a';
+    ctx.fillRect(-len*0.05, -wid*0.35, len*0.18, wid*0.7);
+    ctx.fillStyle = '#2a3540';
+    ctx.beginPath();
+    ctx.arc(-len*0.15, 0, wid*0.28, 0, Math.PI*2);
+    ctx.fill();
+    ctx.fillStyle = '#1a2530';
+    for (let i = 0; i < barrels; i++) {
+      const tx = len*0.35 - i * (len*0.65 / Math.max(1, barrels));
+      ctx.beginPath();
+      ctx.arc(tx, 0, wid*0.28, 0, Math.PI*2);
+      ctx.fill();
+      const aim = isPlayer ? (player.aim - ang) : 0;
+      ctx.save();
+      ctx.translate(tx, 0);
+      ctx.rotate(aim);
+      ctx.fillRect(0, -1.5, wid*0.7, 3);
+      ctx.restore();
+    }
+    ctx.restore();
+
+    // hp bar for enemies
+    if (isEnemy) {
+      const w = 40;
+      ctx.fillStyle = 'rgba(0,0,0,0.5)';
+      ctx.fillRect(x - w/2, y - len*0.45 - 18, w, 4);
+      ctx.fillStyle = hpFrac > 0.4 ? '#b6f06f' : '#f0a06f';
+      ctx.fillRect(x - w/2, y - len*0.45 - 18, w * clamp(hpFrac,0,1), 4);
+    }
+
+    // name tag
+    if (name) {
+      ctx.font = 'bold 11px "Segoe UI", Tahoma';
+      ctx.textAlign = 'center';
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = 'rgba(0,0,0,0.85)';
+      ctx.fillStyle = isEnemy ? '#ff9a9a' : (isPlayer ? '#ffe26a' : '#9bd1ff');
+      const ny = y - len*0.45 - (isEnemy ? 24 : 12);
+      ctx.strokeText(name, x, ny);
+      ctx.fillText(name, x, ny);
+    }
+  }
+
+  function drawCoin(x, y) {
+    ctx.save();
+    ctx.translate(x, y);
+    const t = performance.now() * 0.005;
+    const sx = Math.abs(Math.cos(t));
+    ctx.fillStyle = '#ffd56a';
+    ctx.beginPath();
+    ctx.ellipse(0, 0, 5*sx + 1, 5, 0, 0, Math.PI*2);
+    ctx.fill();
+    ctx.strokeStyle = '#a8761a';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawParticle(p) {
+    const a = clamp(p.life / p.max, 0, 1);
+    ctx.globalAlpha = a;
+    ctx.fillStyle = p.color;
+    ctx.fillRect(p.x - p.size/2, p.y - p.size/2, p.size, p.size);
+    ctx.globalAlpha = 1;
+  }
+
+  function drawMinimapMarkers() { /* drawn separately on UI overlay */ }
+  function drawMinimap() {
+    const mw = 160, mh = 100;
+    const mx = VIEW_W - mw - 14, my = VIEW_H - mh - 14;
+    ctx.fillStyle = 'rgba(4,17,29,0.7)';
+    ctx.fillRect(mx, my, mw, mh);
+    ctx.strokeStyle = '#2d6a9c';
+    ctx.strokeRect(mx, my, mw, mh);
+    const sx = mw / WORLD_W, sy = mh / WORLD_H;
+    // port
+    ctx.fillStyle = '#6b7c4a';
+    ctx.fillRect(mx + PORT.x*sx, my + PORT.y*sy, PORT.w*sx, PORT.h*sy);
+    // islands
+    ctx.fillStyle = '#d8c074';
+    for (const isl of islands) {
+      ctx.beginPath();
+      ctx.arc(mx + isl.x*sx, my + isl.y*sy, Math.max(2, isl.r*sx*0.6), 0, Math.PI*2);
+      ctx.fill();
+    }
+    // enemies
+    ctx.fillStyle = '#ff6a6a';
+    for (const en of enemies) ctx.fillRect(mx + en.x*sx - 1, my + en.y*sy - 1, 3, 3);
+    // escorts
+    ctx.fillStyle = '#4ab1ff';
+    for (const e of escorts) ctx.fillRect(mx + e.x*sx - 1, my + e.y*sy - 1, 2, 2);
+    // player
+    ctx.fillStyle = '#ffe26a';
+    ctx.fillRect(mx + player.x*sx - 2, my + player.y*sy - 2, 4, 4);
+    // viewport rect
+    ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+    ctx.strokeRect(mx + camera.x*sx, my + camera.y*sy, VIEW_W*sx, VIEW_H*sy);
+  }
+
+  function gameOver() {
+    state.running = false;
+    overlay.style.display = 'flex';
+    overlay.querySelector('h1').textContent = 'SUNK';
+    overlay.querySelector('h1').style.color = '#ff6a6a';
+    const ps = overlay.querySelectorAll('p');
+    ps[0].textContent = `Survived ${state.wave} wave(s)`;
+    ps[1].textContent = `Final score: ${state.score}  ·  ${state.coins} coins remaining`;
+    ps[2].textContent = 'Press Set Sail to launch a new destroyer.';
+    ps[3].textContent = '';
+    startBtn.textContent = 'Set Sail Again';
+    hud.style.display = 'none';
+    portCompass.classList.remove('show');
+    hideBanner();
+  }
+
+  startBtn.onclick = () => {
+    overlay.style.display = 'none';
+    hud.style.display = 'flex';
+    overlay.querySelector('h1').textContent = 'BATTLESHIP';
+    overlay.querySelector('h1').style.color = '#ffd56a';
+    Object.keys(purchaseCounts).forEach(k => delete purchaseCounts[k]);
+    reset(true);
+    player.name = 'USS Fletcher';
+    state.running = true;
+    state.paused = false;
+    startWave();
+  };
+
+  reset(true);
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
