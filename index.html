@@ -134,14 +134,30 @@
     letter-spacing: 1px;
   }
   #shop .sub { color: #b8d0e8; margin: 2px 0 14px; }
+  .shopScroll {
+    width: min(820px, 94%);
+    max-height: 66vh;
+    overflow-y: auto;
+    padding: 4px 6px;
+  }
+  .shopScroll::-webkit-scrollbar { width: 10px; }
+  .shopScroll::-webkit-scrollbar-track { background: #0a1a2a; }
+  .shopScroll::-webkit-scrollbar-thumb { background: #2d6a9c; border-radius: 5px; }
+  .shopSectionTitle {
+    color: #ffd56a;
+    font-size: 15px;
+    font-weight: 700;
+    text-align: left;
+    border-bottom: 1px solid #2d6a9c;
+    padding: 12px 4px 6px;
+    margin: 4px 0 8px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
   .shopGrid {
     display: grid;
-    grid-template-columns: repeat(2, minmax(260px, 1fr));
-    gap: 10px;
-    width: min(740px, 92%);
-    max-height: 60vh;
-    overflow-y: auto;
-    padding: 4px;
+    grid-template-columns: repeat(2, minmax(280px, 1fr));
+    gap: 8px;
   }
   .shopItem {
     background: #0e2b44;
@@ -150,6 +166,18 @@
     padding: 10px 12px;
     text-align: left;
   }
+  .shopItem.ship {
+    background: linear-gradient(135deg, #102e4a, #0c2238);
+    border-color: #3a78a8;
+  }
+  .shopItem.ship h3 { color: #ffd56a; }
+  .shopStats {
+    font-size: 11px;
+    color: #8aa6c4;
+    margin: 4px 0 2px;
+    line-height: 1.5;
+  }
+  .shopStats span { display: inline-block; margin-right: 8px; }
   .shopItem h3 {
     margin: 0 0 4px;
     color: #b6f06f;
@@ -229,8 +257,13 @@
 
   <div id="shop">
     <h2>Naval Yard &mdash; Port Royal</h2>
-    <p class="sub"><span class="coin">&#x25C9; <span id="shopCoins">0</span> coins</span> &nbsp; Wave <span id="shopWave">1</span> cleared! Repaired and resupplied.</p>
-    <div class="shopGrid" id="shopGrid"></div>
+    <p class="sub"><span class="coin">&#x25C9; <span id="shopCoins">0</span> coins</span> &nbsp; Wave <span id="shopWave">1</span> cleared! Fleet repaired and resupplied. &nbsp; Fleet: <span id="shopFleetCount">0</span></p>
+    <div class="shopScroll">
+      <div class="shopSectionTitle">Captain's Upgrades</div>
+      <div class="shopGrid" id="shopGridUpgrades"></div>
+      <div class="shopSectionTitle">Fleet &mdash; Build Your Squadron</div>
+      <div class="shopGrid" id="shopGridFleet"></div>
+    </div>
     <button id="nextWaveBtn" style="margin-top:14px;">Set Sail &mdash; Engage Next Wave</button>
   </div>
 
@@ -259,7 +292,6 @@
   const shopEl   = document.getElementById('shop');
   const shopCoins = document.getElementById('shopCoins');
   const shopWave = document.getElementById('shopWave');
-  const shopGrid = document.getElementById('shopGrid');
   const nextWaveBtn = document.getElementById('nextWaveBtn');
   const banner   = document.getElementById('banner');
   const portCompass = document.getElementById('portCompass');
@@ -326,6 +358,83 @@
     battleship: makeNamePool(ENEMY_NAMES.battleship),
   };
 
+  // ---- purchasable allied ship classes ----
+  const SHIP_CLASSES = {
+    fletcher: {
+      label: 'Fletcher-class Destroyer', short: 'DD',
+      desc: 'Fast, light. Single 5-inch gun. Backbone of the fleet.',
+      cost: w => 60 + w*15,
+      hp: 60, len: 42, wid: 12, barrel: 1,
+      dmg: 14, fire: 1.0, range: 480, speed: 2.3, bspeed: 6.0,
+      color: '#4ab1ff', max: 6,
+    },
+    atlanta: {
+      label: 'Atlanta-class AA Cruiser', short: 'CLAA',
+      desc: 'Twin rapid-fire mounts. Excellent against waves of small craft.',
+      cost: w => 140 + w*30,
+      hp: 110, len: 52, wid: 14, barrel: 2,
+      dmg: 12, fire: 1.4, range: 460, speed: 2.0, bspeed: 6.5,
+      color: '#6ad1ff', max: 4,
+    },
+    cleveland: {
+      label: 'Cleveland-class Light Cruiser', short: 'CL',
+      desc: 'Triple-gun salvos. Balanced firepower and durability.',
+      cost: w => 260 + w*45,
+      hp: 170, len: 64, wid: 18, barrel: 3,
+      dmg: 16, fire: 0.9, range: 520, speed: 1.8, bspeed: 6.5,
+      color: '#6ab8e0', max: 3,
+    },
+    baltimore: {
+      label: 'Baltimore-class Heavy Cruiser', short: 'CA',
+      desc: 'Heavy 8-inch armor-piercing rounds. Punches through cruisers.',
+      cost: w => 440 + w*70,
+      hp: 240, len: 74, wid: 22, barrel: 3,
+      dmg: 24, fire: 0.8, range: 560, speed: 1.5, bspeed: 7.0,
+      color: '#8aa0c0', max: 2,
+    },
+    iowa: {
+      label: 'Iowa-class Battleship', short: 'BB',
+      desc: 'Massive 16-inch guns. Slow, but a single salvo wrecks anything.',
+      cost: w => 800 + w*120,
+      hp: 380, len: 92, wid: 26, barrel: 3,
+      dmg: 40, fire: 0.55, range: 620, speed: 1.2, bspeed: 7.0,
+      color: '#aabbd0', max: 1,
+    },
+  };
+
+  const CLASS_NAMES = {
+    fletcher:  ['USS Fletcher','USS O’Bannon','USS Nicholas','USS Taylor','USS Hoel','USS Johnston','USS Heermann','USS Kidd','USS Sullivans','USS Laffey','USS Chevalier','USS Strong'],
+    atlanta:   ['USS Atlanta','USS Juneau','USS San Diego','USS San Juan','USS Reno','USS Flint','USS Oakland'],
+    cleveland: ['USS Cleveland','USS Columbia','USS Montpelier','USS Denver','USS Santa Fe','USS Birmingham','USS Mobile','USS Biloxi'],
+    baltimore: ['USS Baltimore','USS Boston','USS Canberra','USS Pittsburgh','USS Quincy','USS Saint Paul','USS Bremerton'],
+    iowa:      ['USS Iowa','USS New Jersey','USS Missouri','USS Wisconsin'],
+  };
+  const classNamePools = {};
+  for (const k of Object.keys(CLASS_NAMES)) classNamePools[k] = makeNamePool(CLASS_NAMES[k]);
+
+  // ---- shore gun emplacements (static enemy turrets) ----
+  const EMPLACEMENT_SPAWNS = [
+    { x: 1500, y:  600, name: 'Iwo Jima Battery' },
+    { x:  900, y: 1100, name: 'Tarawa Battery' },
+    { x: 2100, y: 1300, name: 'Saipan Coastal Gun' },
+    { x:  300, y: 1000, name: 'Wake Island Battery' },
+    { x: 1800, y:  300, name: 'Kwajalein Battery' },
+    { x: 2300, y:  800, name: 'Atlantic Wall Calais' },
+  ];
+  let emplacements = [];
+  function spawnEmplacements() {
+    emplacements = EMPLACEMENT_SPAWNS.map(s => ({
+      x: s.x, y: s.y, name: s.name,
+      hp: 90, hpMax: 90,
+      fireCd: 1 + Math.random()*2,
+      ang: 0,
+      range: 420,
+      dmg: 22,
+      fire: 0.65,
+      dead: false,
+    }));
+  }
+
   // ---- game state ----
   const state = {
     running: false,
@@ -346,9 +455,10 @@
     damage:     20,
     bulletSpd:  6.5,
     range:      520,
-    escorts:    0,
     armor:      0,
   };
+
+  const FLEET_MAX = 10;
 
   let player, enemies, bullets, particles, escorts, pickups;
   const camera = { x: 0, y: 0 };
@@ -362,36 +472,57 @@
       Object.assign(up, {
         hullMax: 100, speed: 2.4, fireRate: 0.55,
         damage: 20, bulletSpd: 6.5, range: 520,
-        escorts: 0, armor: 0,
+        armor: 0,
       });
     }
     // start docked at port
     player = makeShip(DOCK.x + DOCK.w*0.5, DOCK.y + DOCK.h*0.6, 'player');
     enemies = []; bullets = []; particles = []; pickups = [];
     escorts = [];
-    rebuildEscorts();
+    spawnEmplacements();
+    if (fullReset) {
+      // start with 3 Fletcher-class allies
+      for (let i = 0; i < 3; i++) escorts.push(makeEscortShip('fletcher'));
+    }
     camera.x = clamp(player.x - VIEW_W/2, 0, WORLD_W - VIEW_W);
     camera.y = clamp(player.y - VIEW_H/2, 0, WORLD_H - VIEW_H);
   }
 
-  function rebuildEscorts() {
-    const oldNames = escorts.map(e => e.name);
-    escorts = [];
-    for (let i = 0; i < up.escorts; i++) {
-      escorts.push({
-        x: player.x, y: player.y, ang: 0,
-        cooldown: 0,
-        name: oldNames[i] || allyPool(),
-      });
-    }
+  function makeEscortShip(classKey) {
+    const cls = SHIP_CLASSES[classKey];
+    const off = escortOffset(escorts.length);
+    return {
+      x: player.x + (Math.random()-0.5)*40,
+      y: player.y + 40 + Math.random()*40,
+      ang: player.ang,
+      hp: cls.hp, hpMax: cls.hp,
+      cooldown: 0,
+      class: classKey,
+      short: cls.short,
+      name: classNamePools[classKey](),
+      len: cls.len, wid: cls.wid, barrel: cls.barrel,
+      dmg: cls.dmg, fire: cls.fire, range: cls.range,
+      speed: cls.speed, bspeed: cls.bspeed,
+      color: cls.color,
+    };
+  }
+  function fleetCountByClass(classKey) {
+    return escorts.filter(s => s.class === classKey).length;
   }
   function escortOffset(i) {
-    const offsets = [
-      { dx: -50, dy:  40 },
-      { dx:  50, dy:  40 },
-      { dx:   0, dy:  80 },
+    const positions = [
+      { dx: -55, dy:  50 },
+      { dx:  55, dy:  50 },
+      { dx:   0, dy:  90 },
+      { dx: -95, dy: 110 },
+      { dx:  95, dy: 110 },
+      { dx: -50, dy: 170 },
+      { dx:  50, dy: 170 },
+      { dx:-130, dy: 200 },
+      { dx: 130, dy: 200 },
+      { dx:   0, dy: 230 },
     ];
-    return offsets[i] || { dx: 0, dy: 60 };
+    return positions[i] || { dx: 0, dy: 60 + i*40 };
   }
 
   function makeShip(x, y, type) {
@@ -489,15 +620,21 @@
     { id: 'bspd',    name: 'Higher Velocity',  desc: '+1.5 shell speed',     cost: w => 30 + w*10,  apply: () => { up.bulletSpd += 1.5; } },
     { id: 'range',   name: 'Long Range Optics',desc: '+80 range',            cost: w => 30 + w*12,  apply: () => { up.range += 80; } },
     { id: 'armor',   name: 'Belt Armor',       desc: '+3 damage reduction',  cost: w => 60 + w*20,  apply: () => { up.armor += 3; }, max: 5 },
-    { id: 'escort',  name: 'Escort Destroyer', desc: 'Adds 1 ally ship',     cost: w => 50 + w*15,  apply: () => { up.escorts++; rebuildEscorts(); }, max: 3 },
-    { id: 'repair',  name: 'Full Repair',      desc: 'Restore hull to max',  cost: w => 25 + w*8,   apply: () => { player.hp = player.hpMax; }, repeatable: true },
+    { id: 'repair',  name: 'Fleet Full Repair',desc: 'All ships hull restored',cost: w => 25 + w*8, apply: () => { player.hp = player.hpMax; for (const e of escorts) e.hp = e.hpMax; }, repeatable: true },
   ];
   const purchaseCounts = {};
+
+  const shopGridUpgrades = document.getElementById('shopGridUpgrades');
+  const shopGridFleet = document.getElementById('shopGridFleet');
+  const shopFleetCount = document.getElementById('shopFleetCount');
 
   function openShop() {
     shopCoins.textContent = state.coins;
     shopWave.textContent = state.wave;
-    shopGrid.innerHTML = '';
+    shopFleetCount.textContent = `${escorts.length}/${FLEET_MAX}`;
+
+    // upgrades
+    shopGridUpgrades.innerHTML = '';
     shopItems.forEach(item => {
       const bought = purchaseCounts[item.id] || 0;
       const max = item.max ?? Infinity;
@@ -520,8 +657,55 @@
         openShop();
       };
       div.appendChild(btn);
-      shopGrid.appendChild(div);
+      shopGridUpgrades.appendChild(div);
     });
+
+    // fleet ships
+    shopGridFleet.innerHTML = '';
+    Object.keys(SHIP_CLASSES).forEach(key => {
+      const cls = SHIP_CLASSES[key];
+      const owned = fleetCountByClass(key);
+      const fleetFull = escorts.length >= FLEET_MAX;
+      const classFull = owned >= cls.max;
+      const cost = cls.cost(state.wave);
+      const div = document.createElement('div');
+      div.className = 'shopItem ship';
+      // preview list of available names
+      const remaining = CLASS_NAMES[key].filter(n => !escorts.some(e => e.name === n));
+      const previewNames = remaining.slice(0, 3).join(', ') + (remaining.length > 3 ? ', ...' : '');
+      div.innerHTML = `
+        <h3>${cls.label}</h3>
+        <p>${cls.desc}</p>
+        <div class="shopStats">
+          <span>Hull ${cls.hp}</span>
+          <span>${cls.barrel}&times; gun</span>
+          <span>Dmg ${cls.dmg}</span>
+          <span>Rng ${cls.range}</span>
+          <span>Spd ${cls.speed.toFixed(1)}</span>
+        </div>
+        <p>Owned: ${owned}/${cls.max} &middot; Cost: <span class="coin">&#x25C9; ${cost}</span></p>
+        <p style="font-size:11px;color:#9bd1ff;">Next: ${previewNames || '(none left)'}</p>
+      `;
+      const btn = document.createElement('button');
+      let label;
+      if (classFull) label = `Max ${cls.max} owned`;
+      else if (fleetFull) label = 'Fleet full';
+      else if (state.coins < cost) label = 'Not enough coins';
+      else label = `Buy ${cls.short}`;
+      btn.textContent = label;
+      btn.disabled = classFull || fleetFull || state.coins < cost;
+      btn.onclick = () => {
+        if (state.coins < cost || classFull || fleetFull) return;
+        state.coins -= cost;
+        const ship = makeEscortShip(key);
+        escorts.push(ship);
+        showBanner(`${ship.name} joined the fleet!`, 2200);
+        openShop();
+      };
+      div.appendChild(btn);
+      shopGridFleet.appendChild(div);
+    });
+
     shopEl.classList.add('show');
   }
   function closeShopAndSetSail() {
@@ -635,6 +819,7 @@
     updatePlayer(dt);
     updateEscorts(dt);
     updateEnemies(dt);
+    updateEmplacements(dt);
     updateBullets(dt);
     updatePickups(dt);
     updateParticles(dt);
@@ -652,6 +837,9 @@
     // returning -> port detection
     if (state.phase === 'returning' && pointInDock(player.x, player.y)) {
       state.phase = 'port';
+      // full repair of player and entire fleet on docking
+      player.hp = player.hpMax;
+      for (const e of escorts) e.hp = e.hpMax;
       hideBanner();
       openShop();
     }
@@ -730,28 +918,98 @@
       const ty = player.y + sin * (-off.dy) + (cos)  * off.dx;
       const dx = tx - e.x, dy = ty - e.y;
       const d = Math.hypot(dx, dy);
-      const speed = up.speed * 0.95;
       if (d > 1) {
-        e.x += (dx / d) * Math.min(speed, d * 0.1);
-        e.y += (dy / d) * Math.min(speed, d * 0.1);
+        e.x += (dx / d) * Math.min(e.speed, d * 0.1);
+        e.y += (dy / d) * Math.min(e.speed, d * 0.1);
       }
-      e.cooldown = Math.max(0, e.cooldown - dt);
-      let best = null, bd = (up.range * 0.85) ** 2;
+      e.cooldown = Math.max(0, e.cooldown - dt * e.fire);
+
+      // pick a target — nearest enemy or live shore battery in range
+      let best = null, bd = e.range * e.range;
       for (const en of enemies) {
         const dd = dist2(e, en);
         if (dd < bd) { bd = dd; best = en; }
       }
-      if (best && state.phase === 'wave') {
+      for (const em of emplacements) {
+        if (em.hp <= 0) continue;
+        const dd = dist2(e, em);
+        if (dd < bd) { bd = dd; best = em; }
+      }
+
+      if (best && state.phase !== 'port') {
         const ang = Math.atan2(best.y - e.y, best.x - e.x);
-        e.ang = ang;
+        e.ang += angDiff(ang, e.ang) * 0.18;
         if (e.cooldown <= 0) {
-          fireGun({ x: e.x, y: e.y, ang: ang, len: 40, aim: ang }, 'player', up.damage * 0.6, up.bulletSpd, up.range * 0.85);
-          e.cooldown = 1.2 / up.fireRate;
+          fireGun({ x: e.x, y: e.y, ang: e.ang, len: e.len, aim: ang, barrel: e.barrel }, 'player', e.dmg, e.bspeed, e.range);
+          e.cooldown = 1;
         }
       } else {
         e.ang += angDiff(player.ang, e.ang) * 0.1;
       }
-      if (Math.random() < 0.4) spawnWake({ x: e.x, y: e.y, ang: e.ang, len: 40 });
+      if (Math.random() < 0.4) spawnWake({ x: e.x, y: e.y, ang: e.ang, len: e.len });
+    }
+    // remove sunk ships
+    for (let i = escorts.length-1; i >= 0; i--) {
+      if (escorts[i].hp <= 0) {
+        const f = escorts[i];
+        spawnExplosion(f.x, f.y, '#ffae3a', f.len > 60);
+        showBanner(`${f.name} sunk!`, 2500);
+        escorts.splice(i, 1);
+      }
+    }
+  }
+
+  function updateEmplacements(dt) {
+    for (const em of emplacements) {
+      if (em.hp <= 0) continue;
+      const dx = player.x - em.x, dy = player.y - em.y;
+      const d = Math.hypot(dx, dy);
+      // also rotate toward closest target (player or escort)
+      let best = { x: player.x, y: player.y, d: d };
+      for (const f of escorts) {
+        const fd = Math.hypot(f.x - em.x, f.y - em.y);
+        if (fd < best.d) best = { x: f.x, y: f.y, d: fd };
+      }
+      em.fireCd -= dt * em.fire;
+      if (best.d < em.range) {
+        const targetAng = Math.atan2(best.y - em.y, best.x - em.x);
+        em.ang += angDiff(targetAng, em.ang) * 0.08;
+      }
+      if (em.fireCd <= 0 && best.d < em.range) {
+        const aim = em.ang + (Math.random()-0.5)*0.05;
+        const muzzleX = em.x + Math.cos(em.ang)*16;
+        const muzzleY = em.y + Math.sin(em.ang)*16;
+        bullets.push({
+          x: muzzleX, y: muzzleY,
+          vx: Math.cos(aim)*5.0, vy: Math.sin(aim)*5.0,
+          life: em.range / 5.0,
+          dmg: em.dmg, owner: 'enemy',
+          color: '#ff8a3a',
+        });
+        particles.push({
+          x: muzzleX, y: muzzleY,
+          vx: Math.cos(aim)*1.5, vy: Math.sin(aim)*1.5,
+          life: 10, max: 10, color: '#ffae3a', size: 5,
+        });
+        em.fireCd = 1;
+      }
+    }
+    // destroyed cleanup
+    for (const em of emplacements) {
+      if (em.hp <= 0 && !em.dead) {
+        em.dead = true;
+        spawnExplosion(em.x, em.y, '#ffae3a', true);
+        for (let k = 0; k < 6; k++) {
+          const a = Math.random()*Math.PI*2;
+          pickups.push({
+            x: em.x + Math.cos(a)*8, y: em.y + Math.sin(a)*8,
+            vx: Math.cos(a)*1.5, vy: Math.sin(a)*1.5,
+            life: 18, value: 5,
+          });
+        }
+        state.score += 200;
+        showBanner(`${em.name} destroyed! +30 coins`, 2500);
+      }
     }
   }
 
@@ -834,12 +1092,33 @@
             break;
           }
         }
+        if (b.life <= 0) continue;
+        for (const em of emplacements) {
+          if (em.hp <= 0) continue;
+          if (dist2(b, em) < 22*22) {
+            em.hp -= b.dmg;
+            spawnSplash(b.x, b.y);
+            b.life = 0;
+            break;
+          }
+        }
       } else {
         const r = (player.len + player.wid)*0.25;
         if (dist2(b, player) < r*r) {
           applyDamageToPlayer(b.dmg);
           spawnSplash(b.x, b.y);
           b.life = 0;
+          continue;
+        }
+        for (const f of escorts) {
+          if (f.hp <= 0) continue;
+          const fr = (f.len + f.wid)*0.25;
+          if (dist2(b, f) < fr*fr) {
+            f.hp -= b.dmg;
+            spawnSplash(b.x, b.y);
+            b.life = 0;
+            break;
+          }
         }
       }
     }
@@ -895,7 +1174,9 @@
     for (const p of pickups) drawCoin(p.x, p.y);
     for (const p of particles) drawParticle(p);
 
-    for (const e of escorts) drawShip(e.x, e.y, e.ang, '#4ab1ff', 40, 12, 1, 1, false, false, e.name);
+    for (const em of emplacements) drawEmplacement(em);
+
+    for (const e of escorts) drawShip(e.x, e.y, e.ang, e.color, e.len, e.wid, e.barrel, e.hp / e.hpMax, false, false, e.name, e.short);
     drawShip(player.x, player.y, player.ang, '#bdd6ee', player.len, player.wid, 2, 1, true, false, player.name);
     for (const en of enemies) drawShip(en.x, en.y, en.ang, en.color, en.len, en.wid, en.barrel, en.hp / en.hpMax, false, true, en.name);
 
@@ -1052,7 +1333,7 @@
     }
   }
 
-  function drawShip(x, y, ang, color, len, wid, barrels, hpFrac, isPlayer, isEnemy, name) {
+  function drawShip(x, y, ang, color, len, wid, barrels, hpFrac, isPlayer, isEnemy, name, classShort) {
     ctx.save();
     ctx.translate(x, y);
     ctx.rotate(ang);
@@ -1092,12 +1373,14 @@
     }
     ctx.restore();
 
-    // hp bar for enemies
-    if (isEnemy) {
+    // hp bar — enemies always; allies/escorts when damaged
+    if (isEnemy || (!isPlayer && hpFrac < 0.999)) {
       const w = 40;
       ctx.fillStyle = 'rgba(0,0,0,0.5)';
       ctx.fillRect(x - w/2, y - len*0.45 - 18, w, 4);
-      ctx.fillStyle = hpFrac > 0.4 ? '#b6f06f' : '#f0a06f';
+      ctx.fillStyle = isEnemy
+        ? (hpFrac > 0.4 ? '#b6f06f' : '#f0a06f')
+        : (hpFrac > 0.4 ? '#4ab1ff' : '#f0a06f');
       ctx.fillRect(x - w/2, y - len*0.45 - 18, w * clamp(hpFrac,0,1), 4);
     }
 
@@ -1108,10 +1391,68 @@
       ctx.lineWidth = 3;
       ctx.strokeStyle = 'rgba(0,0,0,0.85)';
       ctx.fillStyle = isEnemy ? '#ff9a9a' : (isPlayer ? '#ffe26a' : '#9bd1ff');
-      const ny = y - len*0.45 - (isEnemy ? 24 : 12);
-      ctx.strokeText(name, x, ny);
-      ctx.fillText(name, x, ny);
+      const ny = y - len*0.45 - ((isEnemy || hpFrac < 0.999) ? 24 : 12);
+      const label = classShort ? `[${classShort}] ${name}` : name;
+      ctx.strokeText(label, x, ny);
+      ctx.fillText(label, x, ny);
     }
+  }
+
+  function drawEmplacement(em) {
+    const damaged = em.hp <= 0;
+    ctx.save();
+    ctx.translate(em.x, em.y);
+    // base concrete pad
+    ctx.fillStyle = damaged ? '#3a2e22' : '#5a5a5a';
+    ctx.strokeStyle = '#1a1a1a';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc(0, 0, 18, 0, Math.PI*2);
+    ctx.fill();
+    ctx.stroke();
+    // sandbag ring
+    ctx.fillStyle = damaged ? '#3a3a2a' : '#a89a6a';
+    for (let i = 0; i < 10; i++) {
+      const a = (i / 10) * Math.PI * 2;
+      ctx.beginPath();
+      ctx.arc(Math.cos(a)*18, Math.sin(a)*18, 4.5, 0, Math.PI*2);
+      ctx.fill();
+    }
+    if (!damaged) {
+      // gun emplacement
+      ctx.rotate(em.ang);
+      ctx.fillStyle = '#2a2a2a';
+      ctx.fillRect(0, -2.5, 24, 5);
+      ctx.fillStyle = '#3a3a3a';
+      ctx.beginPath();
+      ctx.arc(0, 0, 7, 0, Math.PI*2);
+      ctx.fill();
+    } else {
+      // wreckage
+      ctx.fillStyle = '#1a1a1a';
+      ctx.fillRect(-14, -2, 28, 4);
+      ctx.fillRect(-2, -14, 4, 28);
+    }
+    ctx.restore();
+
+    // hp bar
+    if (!damaged) {
+      const w = 40, frac = em.hp / em.hpMax;
+      ctx.fillStyle = 'rgba(0,0,0,0.5)';
+      ctx.fillRect(em.x - w/2, em.y - 36, w, 4);
+      ctx.fillStyle = frac > 0.4 ? '#b6f06f' : '#f0a06f';
+      ctx.fillRect(em.x - w/2, em.y - 36, w * clamp(frac,0,1), 4);
+    }
+
+    // name
+    ctx.font = 'bold 11px "Segoe UI", Tahoma';
+    ctx.textAlign = 'center';
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = 'rgba(0,0,0,0.85)';
+    ctx.fillStyle = damaged ? '#888' : '#ff9a9a';
+    const label = damaged ? `${em.name} (destroyed)` : em.name;
+    ctx.strokeText(label, em.x, em.y - 42);
+    ctx.fillText(label, em.x, em.y - 42);
   }
 
   function drawCoin(x, y) {
@@ -1155,6 +1496,11 @@
       ctx.beginPath();
       ctx.arc(mx + isl.x*sx, my + isl.y*sy, Math.max(2, isl.r*sx*0.6), 0, Math.PI*2);
       ctx.fill();
+    }
+    // emplacements
+    for (const em of emplacements) {
+      ctx.fillStyle = em.hp > 0 ? '#ff8a3a' : '#444';
+      ctx.fillRect(mx + em.x*sx - 2, my + em.y*sy - 2, 4, 4);
     }
     // enemies
     ctx.fillStyle = '#ff6a6a';
