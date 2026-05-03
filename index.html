@@ -485,6 +485,7 @@
   ];
   let queuedBattle = null;
   const battlesWon = new Set();
+  let sunkThisWave = []; // ships lost during the current wave, revived at wave end
 
   // ---- shore gun emplacements (static enemy turrets) ----
   const EMPLACEMENT_SPAWNS = [
@@ -561,6 +562,7 @@
       state.phase = 'port';
       leadClass = 'fletcher';
       Object.keys(upgradeLevels).forEach(k => upgradeLevels[k] = 0);
+      sunkThisWave = [];
     }
     // start docked at port
     player = makeShip(DOCK.x + DOCK.w*0.5, DOCK.y + DOCK.h*0.6, 'player');
@@ -577,9 +579,8 @@
     camera.y = clamp(player.y - VIEW_H/2, 0, WORLD_H - VIEW_H);
   }
 
-  function makeEscortShip(classKey) {
+  function makeEscortShipWithName(classKey, name) {
     const cls = SHIP_CLASSES[classKey];
-    const off = escortOffset(escorts.length);
     return {
       x: player.x + (Math.random()-0.5)*40,
       y: player.y + 40 + Math.random()*40,
@@ -588,12 +589,15 @@
       cooldown: 0,
       class: classKey,
       short: cls.short,
-      name: classNamePools[classKey](),
+      name: name,
       len: cls.len, wid: cls.wid, barrel: cls.barrel,
       dmg: cls.dmg, fire: cls.fire, range: cls.range,
       speed: cls.speed, bspeed: cls.bspeed,
       color: cls.color,
     };
+  }
+  function makeEscortShip(classKey) {
+    return makeEscortShipWithName(classKey, classNamePools[classKey]());
   }
   function fleetCountByClass(classKey) {
     return escorts.filter(s => s.class === classKey).length;
@@ -689,15 +693,31 @@
     // auto-heal entire fleet at end of every wave
     player.hp = player.hpMax;
     for (const e of escorts) e.hp = e.hpMax;
+
+    // recover every ship that was sunk during this wave
+    let recovered = 0;
+    for (const lost of sunkThisWave) {
+      const ship = makeEscortShipWithName(lost.class, lost.name);
+      escorts.push(ship);
+      recovered++;
+    }
+    sunkThisWave = [];
+
+    // round bonus: always +50 coins per cleared wave
+    const ROUND_BONUS = 50;
+    state.coins += ROUND_BONUS;
+
     if (state.activeBattle) {
       const b = state.activeBattle;
       state.coins += b.bonus;
       state.score += b.bonus * 4;
       battlesWon.add(b.id);
       state.activeBattle = null;
-      showBanner(`Victory at ${b.name}! +${b.bonus} coin bonus &middot; Fleet healed`, 5000);
+      const recoveredMsg = recovered > 0 ? ` &middot; ${recovered} ship${recovered>1?'s':''} salvaged` : '';
+      showBanner(`Victory at ${b.name}! +${b.bonus + ROUND_BONUS} coins &middot; Fleet healed${recoveredMsg}`, 5000);
     } else {
-      showBanner('Wave cleared! Fleet healed. Return to port to upgrade.', 4000);
+      const recoveredMsg = recovered > 0 ? ` &middot; ${recovered} ship${recovered>1?'s':''} salvaged` : '';
+      showBanner(`Wave cleared! +${ROUND_BONUS} coins &middot; Fleet healed${recoveredMsg}`, 4000);
     }
   }
 
@@ -1163,12 +1183,13 @@
       }
       if (Math.random() < 0.4) spawnWake({ x: e.x, y: e.y, ang: e.ang, len: e.len });
     }
-    // remove sunk ships
+    // remove sunk ships — they will be recovered at end of wave
     for (let i = escorts.length-1; i >= 0; i--) {
       if (escorts[i].hp <= 0) {
         const f = escorts[i];
         spawnExplosion(f.x, f.y, '#ffae3a', f.len > 60);
-        showBanner(`${f.name} sunk!`, 2500);
+        showBanner(`${f.name} sunk! &mdash; will be salvaged at wave end`, 2500);
+        sunkThisWave.push({ class: f.class, name: f.name });
         escorts.splice(i, 1);
       }
     }
