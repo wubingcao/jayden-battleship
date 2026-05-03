@@ -403,6 +403,7 @@
         cooldown: 0,
         type: 'player',
         len: 56, wid: 16,
+        barrel: 2,
         name: 'USS Fletcher',
       };
     }
@@ -488,7 +489,7 @@
     { id: 'bspd',    name: 'Higher Velocity',  desc: '+1.5 shell speed',     cost: w => 30 + w*10,  apply: () => { up.bulletSpd += 1.5; } },
     { id: 'range',   name: 'Long Range Optics',desc: '+80 range',            cost: w => 30 + w*12,  apply: () => { up.range += 80; } },
     { id: 'armor',   name: 'Belt Armor',       desc: '+3 damage reduction',  cost: w => 60 + w*20,  apply: () => { up.armor += 3; }, max: 5 },
-    { id: 'escort',  name: 'Escort Destroyer', desc: 'Adds 1 ally ship',     cost: w => 120 + w*40, apply: () => { up.escorts++; rebuildEscorts(); }, max: 3 },
+    { id: 'escort',  name: 'Escort Destroyer', desc: 'Adds 1 ally ship',     cost: w => 50 + w*15,  apply: () => { up.escorts++; rebuildEscorts(); }, max: 3 },
     { id: 'repair',  name: 'Full Repair',      desc: 'Restore hull to max',  cost: w => 25 + w*8,   apply: () => { player.hp = player.hpMax; }, repeatable: true },
   ];
   const purchaseCounts = {};
@@ -576,13 +577,36 @@
 
   function fireGun(shooter, owner, baseDmg, baseSpd, range) {
     const ang = shooter.aim ?? shooter.ang;
-    bullets.push({
-      x: shooter.x + Math.cos(ang)*shooter.len*0.5,
-      y: shooter.y + Math.sin(ang)*shooter.len*0.5,
-      vx: Math.cos(ang)*baseSpd, vy: Math.sin(ang)*baseSpd,
-      life: range / baseSpd,
-      dmg: baseDmg, owner, color: owner === 'player' ? '#ffe26a' : '#ff6a6a',
-    });
+    const barrels = shooter.barrel || 1;
+    const len = shooter.len;
+    // ship body axis (where the turrets sit), separate from the aim
+    const bodyAng = shooter.ang ?? ang;
+    const cosB = Math.cos(bodyAng), sinB = Math.sin(bodyAng);
+    for (let i = 0; i < barrels; i++) {
+      // matches turret render positions along the ship deck
+      const tx = barrels === 1
+        ? len*0.35
+        : (len*0.35 - i * (len*0.65 / barrels));
+      const mx = shooter.x + cosB * tx;
+      const my = shooter.y + sinB * tx;
+      // small natural spread on multi-gun salvos
+      const spread = barrels > 1 ? (Math.random() - 0.5) * 0.05 : 0;
+      const fa = ang + spread;
+      bullets.push({
+        x: mx, y: my,
+        vx: Math.cos(fa)*baseSpd, vy: Math.sin(fa)*baseSpd,
+        life: range / baseSpd,
+        dmg: baseDmg, owner,
+        color: owner === 'player' ? '#ffe26a' : '#ff6a6a',
+      });
+      // muzzle flash particle
+      particles.push({
+        x: mx, y: my,
+        vx: Math.cos(fa)*1.2, vy: Math.sin(fa)*1.2,
+        life: 8, max: 8,
+        color: '#ffd56a', size: 4,
+      });
+    }
   }
 
   // ---- main loop ----
@@ -771,13 +795,15 @@
         const en = enemies[i];
         spawnExplosion(en.x, en.y, '#ffae3a', en.kind === 'battleship' || en.kind === 'cruiser');
         state.score += en.score;
-        const drops = Math.max(1, Math.round(en.value / 6));
+        // flat 20 coins per kill, split into a few pickups
+        const drops = 4;
+        const perDrop = 5; // 4 * 5 = 20
         for (let k = 0; k < drops; k++) {
           const a = Math.random()*Math.PI*2;
           pickups.push({
             x: en.x + Math.cos(a)*8, y: en.y + Math.sin(a)*8,
             vx: Math.cos(a)*1.5, vy: Math.sin(a)*1.5,
-            life: 18, value: Math.ceil(en.value / drops),
+            life: 18, value: perDrop,
           });
         }
         enemies.splice(i, 1);
