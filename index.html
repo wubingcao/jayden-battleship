@@ -199,6 +199,76 @@
     letter-spacing: 1px;
     margin-bottom: 4px;
   }
+  .formationContainer {
+    background: #0a1a2a;
+    border: 1px solid #2d6a9c;
+    border-radius: 8px;
+    padding: 10px;
+    margin-bottom: 8px;
+    text-align: center;
+  }
+  .formationHelp {
+    color: #8aa6c4;
+    font-size: 12px;
+    margin: 0 0 8px;
+  }
+  .formationBox {
+    position: relative;
+    width: 320px;
+    height: 320px;
+    background:
+      radial-gradient(circle at center, #143a55 0%, #08172a 70%),
+      #08172a;
+    border: 1px solid #2d6a9c;
+    border-radius: 6px;
+    margin: 0 auto;
+    overflow: hidden;
+  }
+  .formationBox::before {
+    content: '';
+    position: absolute;
+    left: 0; right: 0; top: 50%;
+    border-top: 1px dashed rgba(255,255,255,0.08);
+  }
+  .formationBox::after {
+    content: '';
+    position: absolute;
+    top: 0; bottom: 0; left: 50%;
+    border-left: 1px dashed rgba(255,255,255,0.08);
+  }
+  .formationDot {
+    position: absolute;
+    border-radius: 4px;
+    cursor: grab;
+    transform: translate(-50%, -50%);
+    font-size: 9px;
+    text-align: center;
+    line-height: 1;
+    color: #fff;
+    text-shadow: 0 1px 1px #000;
+    border: 1px solid rgba(0,0,0,0.5);
+    white-space: nowrap;
+    overflow: hidden;
+    user-select: none;
+    padding-top: 2px;
+    box-sizing: border-box;
+  }
+  .formationDot:active { cursor: grabbing; }
+  .formationDot.lead {
+    background: #ffd56a;
+    color: #04111d;
+    cursor: default;
+    z-index: 2;
+  }
+  .formationLabel {
+    position: absolute;
+    transform: translate(-50%, -100%);
+    color: #b8d0e8;
+    font-size: 10px;
+    text-shadow: 0 1px 2px #000;
+    pointer-events: none;
+    white-space: nowrap;
+  }
   .shopStats {
     font-size: 11px;
     color: #8aa6c4;
@@ -266,7 +336,8 @@
     </div>
     <div class="right" style="text-align:right;">
       Wave <span id="waveNum">1</span> &nbsp; Score <span id="score">0</span><br/>
-      <span class="coin">&#x25C9; <span id="coins">0</span> coins</span>
+      <span class="coin">&#x25C9; <span id="coins">0</span> coins</span><br/>
+      <span id="autoFireBadge" style="font-size:11px;color:#9bd1ff;">Auto-fire: <b id="autoFireState">OFF</b> (T)</span>
     </div>
   </div>
 
@@ -278,7 +349,7 @@
     <h1>BATTLESHIP</h1>
     <p style="font-size:18px;color:#ffd56a;">Destroyer Command &mdash; 1942</p>
     <p>You command a WWII destroyer. Sink enemy ships, return to port, and upgrade your fleet.</p>
-    <p style="margin-top:14px;"><b>WASD / Arrows</b> sail &nbsp; <b>Mouse</b> aim &nbsp; <b>Click / Space</b> fire &nbsp; <b>P</b> pause</p>
+    <p style="margin-top:14px;"><b>WASD / Arrows</b> sail &nbsp; <b>Mouse</b> aim &nbsp; <b>Click / Space</b> fire &nbsp; <b>T</b> auto-fire &nbsp; <b>P</b> pause</p>
     <p style="font-size:13px;color:#8aa6c4;">Sandbox mode: open ocean. Defeat the wave, then sail back to port to repair and resupply.</p>
     <button id="startBtn">Set Sail</button>
   </div>
@@ -291,6 +362,12 @@
       <div class="shopGrid" id="shopGridFlagship"></div>
       <div class="shopSectionTitle">Captain's Upgrades</div>
       <div class="shopGrid" id="shopGridUpgrades"></div>
+      <div class="shopSectionTitle">Fleet Formation</div>
+      <div class="formationContainer">
+        <p class="formationHelp">Drag your ships to set their position relative to the flagship. The flagship sits at the center, advance is up.</p>
+        <div id="formationBox" class="formationBox"></div>
+        <button id="formationResetBtn" style="margin-top: 8px;">Reset to V Formation</button>
+      </div>
       <div class="shopSectionTitle">Fleet &mdash; Build Your Squadron</div>
       <div class="shopGrid" id="shopGridFleet"></div>
       <div class="shopSectionTitle">Historic Battles</div>
@@ -299,7 +376,7 @@
     <button id="nextWaveBtn" style="margin-top:14px;">Set Sail &mdash; Engage Next Wave</button>
   </div>
 
-  <div class="keyHint">WASD/Arrows move &middot; Mouse aim &middot; Click or Space fire &middot; P pause</div>
+  <div class="keyHint">WASD/Arrows move &middot; Mouse aim &middot; Click/Space fire &middot; T auto-fire &middot; P pause</div>
 </div>
 
 <script>
@@ -337,6 +414,14 @@
     if (e.key === ' ') e.preventDefault();
     if (e.key.toLowerCase() === 'p' && state.running && !shopEl.classList.contains('show')) {
       state.paused = !state.paused;
+    }
+    if (e.key.toLowerCase() === 't' && state.running) {
+      state.autoShoot = !state.autoShoot;
+      const el = document.getElementById('autoFireState');
+      if (el) {
+        el.textContent = state.autoShoot ? 'ON' : 'OFF';
+        el.style.color = state.autoShoot ? '#b6f06f' : '#ff9a9a';
+      }
     }
   });
   window.addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
@@ -432,6 +517,15 @@
       dmg: 40, fire: 0.55, range: 620, speed: 1.2, bspeed: 7.0,
       color: '#aabbd0', max: 1,
     },
+    essex: {
+      label: 'Essex-class Carrier', short: 'CV',
+      desc: 'Floating airbase. Launches strike aircraft instead of guns. Long reach.',
+      cost: w => 700 + w*100,
+      hp: 320, len: 100, wid: 24, barrel: 1,
+      dmg: 25, fire: 0.55, range: 800, speed: 1.5, bspeed: 4.5,
+      color: '#94c094', max: 2,
+      carrier: true,
+    },
   };
 
   const CLASS_NAMES = {
@@ -440,6 +534,7 @@
     cleveland: ['USS Cleveland','USS Columbia','USS Montpelier','USS Denver','USS Santa Fe','USS Birmingham','USS Mobile','USS Biloxi'],
     baltimore: ['USS Baltimore','USS Boston','USS Canberra','USS Pittsburgh','USS Quincy','USS Saint Paul','USS Bremerton'],
     iowa:      ['USS Iowa','USS New Jersey','USS Missouri','USS Wisconsin'],
+    essex:     ['USS Essex','USS Enterprise','USS Yorktown','USS Hornet','USS Lexington','USS Saratoga','USS Wasp','USS Intrepid','USS Bunker Hill','USS Franklin'],
   };
   const classNamePools = {};
   for (const k of Object.keys(CLASS_NAMES)) classNamePools[k] = makeNamePool(CLASS_NAMES[k]);
@@ -520,6 +615,7 @@
     coins: 0,
     spawnQueue: null,
     spawnCooldown: 0,
+    autoShoot: false,
   };
 
   // captain's upgrade levels — transfer with you when you swap flagship
@@ -530,7 +626,7 @@
 
   const FLEET_MAX = 10;
 
-  let player, enemies, bullets, particles, escorts, pickups;
+  let player, enemies, bullets, particles, escorts, pickups, aircraft = [];
   const camera = { x: 0, y: 0 };
 
   function rebuildPlayer(preserveHpFrac) {
@@ -568,7 +664,7 @@
     player = makeShip(DOCK.x + DOCK.w*0.5, DOCK.y + DOCK.h*0.6, 'player');
     if (fullReset) player.name = 'USS Fletcher';
     rebuildPlayer(false);
-    enemies = []; bullets = []; particles = []; pickups = [];
+    enemies = []; bullets = []; particles = []; pickups = []; aircraft = [];
     escorts = [];
     spawnEmplacements();
     if (fullReset) {
@@ -594,6 +690,7 @@
       dmg: cls.dmg, fire: cls.fire, range: cls.range,
       speed: cls.speed, bspeed: cls.bspeed,
       color: cls.color,
+      carrier: !!cls.carrier,
     };
   }
   function makeEscortShip(classKey) {
@@ -698,6 +795,7 @@
     let recovered = 0;
     for (const lost of sunkThisWave) {
       const ship = makeEscortShipWithName(lost.class, lost.name);
+      if (lost.customOffset) ship.customOffset = lost.customOffset;
       escorts.push(ship);
       recovered++;
     }
@@ -758,6 +856,87 @@
   const shopGridFleet = document.getElementById('shopGridFleet');
   const shopGridBattles = document.getElementById('shopGridBattles');
   const shopFleetCount = document.getElementById('shopFleetCount');
+  const formationBox = document.getElementById('formationBox');
+  const formationResetBtn = document.getElementById('formationResetBtn');
+
+  // ---- formation editor ----
+  // formation box is 320x320 px; lead is centered horizontally and slightly above center
+  const FORMATION_SCALE = 0.5; // 1 world unit = 0.5 px
+  const FORMATION_BOX_W = 320, FORMATION_BOX_H = 320;
+  const FORMATION_CX = FORMATION_BOX_W / 2;
+  const FORMATION_CY = FORMATION_BOX_H / 2 - 40;
+
+  function worldToBox(off) {
+    return { x: FORMATION_CX + off.dx * FORMATION_SCALE,
+             y: FORMATION_CY + off.dy * FORMATION_SCALE };
+  }
+  function boxToWorld(x, y) {
+    return { dx: (x - FORMATION_CX) / FORMATION_SCALE,
+             dy: (y - FORMATION_CY) / FORMATION_SCALE };
+  }
+
+  function populateFormation() {
+    formationBox.innerHTML = '';
+    // lead pip at center
+    const lead = document.createElement('div');
+    lead.className = 'formationDot lead';
+    lead.style.left = FORMATION_CX + 'px';
+    lead.style.top = FORMATION_CY + 'px';
+    lead.style.width = '36px';
+    lead.style.height = '14px';
+    lead.textContent = '★ ' + (player.short || 'DD');
+    formationBox.appendChild(lead);
+
+    // each escort as a draggable pip
+    escorts.forEach((e, i) => {
+      const off = e.customOffset || escortOffset(i);
+      const pos = worldToBox(off);
+      const dot = document.createElement('div');
+      dot.className = 'formationDot escort';
+      const w = Math.max(22, e.len * 0.4);
+      const h = Math.max(10, e.wid * 0.6);
+      dot.style.width = w + 'px';
+      dot.style.height = h + 'px';
+      dot.style.left = pos.x + 'px';
+      dot.style.top = pos.y + 'px';
+      dot.style.background = e.color;
+      dot.textContent = e.short;
+      dot.title = e.name;
+
+      let dragging = false, startX, startY, origX, origY;
+      const onMove = (ev) => {
+        if (!dragging) return;
+        let nx = origX + (ev.clientX - startX);
+        let ny = origY + (ev.clientY - startY);
+        nx = Math.max(w/2 + 2, Math.min(FORMATION_BOX_W - w/2 - 2, nx));
+        ny = Math.max(h/2 + 2, Math.min(FORMATION_BOX_H - h/2 - 2, ny));
+        dot.style.left = nx + 'px';
+        dot.style.top = ny + 'px';
+        e.customOffset = boxToWorld(nx, ny);
+      };
+      const onUp = () => {
+        dragging = false;
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+      };
+      dot.addEventListener('mousedown', (ev) => {
+        dragging = true;
+        startX = ev.clientX; startY = ev.clientY;
+        origX = parseFloat(dot.style.left);
+        origY = parseFloat(dot.style.top);
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('mouseup', onUp);
+        ev.preventDefault();
+      });
+
+      formationBox.appendChild(dot);
+    });
+  }
+
+  formationResetBtn.onclick = () => {
+    for (const e of escorts) e.customOffset = null;
+    populateFormation();
+  };
 
   function swapFlagship(escortIdx) {
     const e = escorts[escortIdx];
@@ -789,6 +968,7 @@
     shopCoins.textContent = state.coins;
     shopWave.textContent = state.wave;
     shopFleetCount.textContent = `${escorts.length}/${FLEET_MAX}`;
+    populateFormation();
 
     // flagship — current lead first, then each escort with a "Take Command" button
     shopGridFlagship.innerHTML = '';
@@ -1055,6 +1235,7 @@
     updateEscorts(dt);
     updateEnemies(dt);
     updateEmplacements(dt);
+    updateAircraft(dt);
     updateBullets(dt);
     updatePickups(dt);
     updateParticles(dt);
@@ -1132,14 +1313,38 @@
     player.x = clamp(nx, 30, WORLD_W-30);
     player.y = clamp(ny, 30, WORLD_H-30);
 
-    player.aim = Math.atan2(mouse.y - player.y, mouse.x - player.x);
+    // auto-aim: if enabled, lock on to nearest target in range
+    let autoTarget = null;
+    if (state.autoShoot && state.phase !== 'port') {
+      let bd = player.range * player.range;
+      for (const en of enemies) {
+        const dd = dist2(player, en);
+        if (dd < bd) { bd = dd; autoTarget = en; }
+      }
+      for (const em of emplacements) {
+        if (em.hp <= 0) continue;
+        const dd = dist2(player, em);
+        if (dd < bd) { bd = dd; autoTarget = em; }
+      }
+    }
+    if (autoTarget) {
+      player.aim = Math.atan2(autoTarget.y - player.y, autoTarget.x - player.x);
+    } else {
+      player.aim = Math.atan2(mouse.y - player.y, mouse.x - player.x);
+    }
 
     if (sp > 0.3 && Math.random() < 0.7) spawnWake(player);
 
     player.cooldown = Math.max(0, player.cooldown - dt * player.fireRate);
     // no firing while at port
-    if (state.phase !== 'port' && (mouse.down || keys[' ']) && player.cooldown <= 0) {
-      fireGun(player, 'player', player.damage, player.bulletSpd, player.range);
+    const wantFire = state.autoShoot ? !!autoTarget : (mouse.down || keys[' ']);
+    if (state.phase !== 'port' && wantFire && player.cooldown <= 0) {
+      if (SHIP_CLASSES[leadClass].carrier) {
+        // launch a strike package toward target/aim
+        for (let k = 0; k < 2; k++) launchAircraft(player, autoTarget, player.aim);
+      } else {
+        fireGun(player, 'player', player.damage, player.bulletSpd, player.range);
+      }
       player.cooldown = 1;
     }
   }
@@ -1147,7 +1352,7 @@
   function updateEscorts(dt) {
     for (let i = 0; i < escorts.length; i++) {
       const e = escorts[i];
-      const off = escortOffset(i);
+      const off = e.customOffset || escortOffset(i);
       const cos = Math.cos(player.ang), sin = Math.sin(player.ang);
       const tx = player.x + cos * (-off.dy) + (-sin) * off.dx;
       const ty = player.y + sin * (-off.dy) + (cos)  * off.dx;
@@ -1175,7 +1380,12 @@
         const ang = Math.atan2(best.y - e.y, best.x - e.x);
         e.ang += angDiff(ang, e.ang) * 0.18;
         if (e.cooldown <= 0) {
-          fireGun({ x: e.x, y: e.y, ang: e.ang, len: e.len, aim: ang, barrel: e.barrel }, 'player', e.dmg, e.bspeed, e.range);
+          if (e.carrier) {
+            // launch a strike package of 2 aircraft
+            for (let k = 0; k < 2; k++) launchAircraft(e, best);
+          } else {
+            fireGun({ x: e.x, y: e.y, ang: e.ang, len: e.len, aim: ang, barrel: e.barrel }, 'player', e.dmg, e.bspeed, e.range);
+          }
           e.cooldown = 1;
         }
       } else {
@@ -1189,10 +1399,90 @@
         const f = escorts[i];
         spawnExplosion(f.x, f.y, '#ffae3a', f.len > 60);
         showBanner(`${f.name} sunk! &mdash; will be salvaged at wave end`, 2500);
-        sunkThisWave.push({ class: f.class, name: f.name });
+        sunkThisWave.push({ class: f.class, name: f.name, customOffset: f.customOffset || null });
         escorts.splice(i, 1);
       }
     }
+  }
+
+  // ---- carrier aircraft ----
+  function launchAircraft(carrier, target, fallbackAng) {
+    const ang = target
+      ? Math.atan2(target.y - carrier.y, target.x - carrier.x)
+      : (fallbackAng ?? carrier.ang ?? 0);
+    const off = (Math.random() - 0.5) * 0.6;
+    aircraft.push({
+      x: carrier.x + Math.cos(ang)*30 + (Math.random()-0.5)*20,
+      y: carrier.y + Math.sin(ang)*30 + (Math.random()-0.5)*20,
+      ang: ang + off,
+      speed: 4.5,
+      target: target,
+      life: 280,
+      dmg: carrier.dmg ?? carrier.damage ?? 25,
+    });
+  }
+
+  function updateAircraft(dt) {
+    for (const a of aircraft) {
+      // re-target if current target is gone
+      if (!a.target || a.target.hp <= 0) {
+        let best = null, bd = 900*900;
+        for (const en of enemies) {
+          const dd = dist2(a, en);
+          if (dd < bd) { bd = dd; best = en; }
+        }
+        for (const em of emplacements) {
+          if (em.hp <= 0) continue;
+          const dd = dist2(a, em);
+          if (dd < bd) { bd = dd; best = em; }
+        }
+        a.target = best;
+      }
+      if (a.target) {
+        const targetAng = Math.atan2(a.target.y - a.y, a.target.x - a.x);
+        a.ang += angDiff(targetAng, a.ang) * 0.12;
+        const r = a.target.len ? (a.target.len + a.target.wid)*0.25 : 22;
+        if (dist2(a, a.target) < r*r) {
+          a.target.hp -= a.dmg;
+          spawnExplosion(a.x, a.y, '#ffae3a', false);
+          a.life = 0;
+          continue;
+        }
+      }
+      a.x += Math.cos(a.ang) * a.speed;
+      a.y += Math.sin(a.ang) * a.speed;
+      a.life -= 1;
+      // contrail particles
+      if (Math.random() < 0.5) {
+        particles.push({
+          x: a.x - Math.cos(a.ang)*6, y: a.y - Math.sin(a.ang)*6,
+          vx: 0, vy: 0,
+          life: 18, max: 18, color: '#ffffff', size: 2,
+        });
+      }
+    }
+    for (let i = aircraft.length-1; i >= 0; i--) if (aircraft[i].life <= 0) aircraft.splice(i, 1);
+  }
+
+  function drawAircraft(a) {
+    ctx.save();
+    ctx.translate(a.x, a.y);
+    ctx.rotate(a.ang);
+    // wings
+    ctx.fillStyle = '#7e8c9c';
+    ctx.fillRect(-3, -8, 6, 16);
+    // fuselage
+    ctx.fillStyle = '#dde6f0';
+    ctx.beginPath();
+    ctx.moveTo(9, 0);
+    ctx.lineTo(-7, 4);
+    ctx.lineTo(-7, -4);
+    ctx.closePath();
+    ctx.fill();
+    // tail
+    ctx.fillStyle = '#7e8c9c';
+    ctx.fillRect(-8, -3, 3, 6);
+    ctx.restore();
   }
 
   function updateEmplacements(dt) {
@@ -1422,6 +1712,8 @@
       ctx.arc(b.x, b.y, 2.6, 0, Math.PI*2);
       ctx.fill();
     }
+
+    for (const a of aircraft) drawAircraft(a);
 
     if (state.running && !state.paused) {
       ctx.strokeStyle = 'rgba(255, 213, 106, 0.5)';
@@ -1776,6 +2068,9 @@
     Object.keys(purchaseCounts).forEach(k => delete purchaseCounts[k]);
     battlesWon.clear();
     queuedBattle = null;
+    state.autoShoot = false;
+    const afState = document.getElementById('autoFireState');
+    if (afState) { afState.textContent = 'OFF'; afState.style.color = '#ff9a9a'; }
     reset(true);
     state.running = true;
     state.paused = false;
