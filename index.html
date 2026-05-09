@@ -214,8 +214,8 @@
   }
   .formationBox {
     position: relative;
-    width: 320px;
-    height: 320px;
+    width: 500px;
+    height: 500px;
     background:
       radial-gradient(circle at center, #143a55 0%, #08172a 70%),
       #08172a;
@@ -485,6 +485,14 @@
       dmg: 14, fire: 1.0, range: 480, speed: 2.3, bspeed: 6.0,
       color: '#4ab1ff', max: 6,
     },
+    gearing: {
+      label: 'Gearing-class Destroyer', short: 'DDR',
+      desc: 'Upgraded Fletcher with twin 5-inch mounts. Faster and more punch than a standard DD.',
+      cost: w => 100 + w*20,
+      hp: 75, len: 48, wid: 13, barrel: 2,
+      dmg: 15, fire: 1.1, range: 500, speed: 2.5, bspeed: 6.2,
+      color: '#5ac8ff', max: 4,
+    },
     atlanta: {
       label: 'Atlanta-class AA Cruiser', short: 'CLAA',
       desc: 'Twin rapid-fire mounts. Excellent against waves of small craft.',
@@ -509,10 +517,18 @@
       dmg: 24, fire: 0.8, range: 560, speed: 1.5, bspeed: 7.0,
       color: '#8aa0c0', max: 2,
     },
+    alaska: {
+      label: 'Alaska-class Battlecruiser', short: 'CBC',
+      desc: 'Large Cruiser packing 12-inch guns. Faster than a battleship, harder-hitting than any cruiser.',
+      cost: w => 560 + w*85,
+      hp: 310, len: 84, wid: 24, barrel: 3,
+      dmg: 32, fire: 0.65, range: 580, speed: 1.4, bspeed: 7.0,
+      color: '#c0a8d8', max: 2,
+    },
     iowa: {
       label: 'Iowa-class Battleship', short: 'BB',
       desc: 'Massive 16-inch guns. Slow, but a single salvo wrecks anything.',
-      cost: w => 800 + w*120,
+      cost: w => 500 + w*80,
       hp: 380, len: 92, wid: 26, barrel: 3,
       dmg: 40, fire: 0.55, range: 620, speed: 1.2, bspeed: 7.0,
       color: '#aabbd0', max: 1,
@@ -529,12 +545,14 @@
   };
 
   const CLASS_NAMES = {
-    fletcher:  ['USS Fletcher','USS O’Bannon','USS Nicholas','USS Taylor','USS Hoel','USS Johnston','USS Heermann','USS Kidd','USS Sullivans','USS Laffey','USS Chevalier','USS Strong'],
-    atlanta:   ['USS Atlanta','USS Juneau','USS San Diego','USS San Juan','USS Reno','USS Flint','USS Oakland'],
-    cleveland: ['USS Cleveland','USS Columbia','USS Montpelier','USS Denver','USS Santa Fe','USS Birmingham','USS Mobile','USS Biloxi'],
-    baltimore: ['USS Baltimore','USS Boston','USS Canberra','USS Pittsburgh','USS Quincy','USS Saint Paul','USS Bremerton'],
-    iowa:      ['USS Iowa','USS New Jersey','USS Missouri','USS Wisconsin'],
-    essex:     ['USS Essex','USS Enterprise','USS Yorktown','USS Hornet','USS Lexington','USS Saratoga','USS Wasp','USS Intrepid','USS Bunker Hill','USS Franklin'],
+    fletcher:  [‘USS Fletcher’,’USS O\’Bannon’,’USS Nicholas’,’USS Taylor’,’USS Hoel’,’USS Johnston’,’USS Heermann’,’USS Kidd’,’USS Sullivans’,’USS Laffey’,’USS Chevalier’,’USS Strong’],
+    gearing:   [‘USS Gearing’,’USS Maddox’,’USS Frank Knox’,’USS Sarsfield’,’USS Henderson’,’USS Holder’,’USS Eugene A. Greene’,’USS Fechteler’],
+    atlanta:   [‘USS Atlanta’,’USS Juneau’,’USS San Diego’,’USS San Juan’,’USS Reno’,’USS Flint’,’USS Oakland’],
+    cleveland: [‘USS Cleveland’,’USS Columbia’,’USS Montpelier’,’USS Denver’,’USS Santa Fe’,’USS Birmingham’,’USS Mobile’,’USS Biloxi’],
+    baltimore: [‘USS Baltimore’,’USS Boston’,’USS Canberra’,’USS Pittsburgh’,’USS Quincy’,’USS Saint Paul’,’USS Bremerton’],
+    alaska:    [‘USS Alaska’,’USS Guam’],
+    iowa:      [‘USS Iowa’,’USS New Jersey’,’USS Missouri’,’USS Wisconsin’],
+    essex:     [‘USS Essex’,’USS Enterprise’,’USS Yorktown’,’USS Hornet’,’USS Lexington’,’USS Saratoga’,’USS Wasp’,’USS Intrepid’,’USS Bunker Hill’,’USS Franklin’],
   };
   const classNamePools = {};
   for (const k of Object.keys(CLASS_NAMES)) classNamePools[k] = makeNamePool(CLASS_NAMES[k]);
@@ -860,11 +878,11 @@
   const formationResetBtn = document.getElementById('formationResetBtn');
 
   // ---- formation editor ----
-  // formation box is 320x320 px; lead is centered horizontally and slightly above center
-  const FORMATION_SCALE = 0.5; // 1 world unit = 0.5 px
-  const FORMATION_BOX_W = 320, FORMATION_BOX_H = 320;
+  // formation box is 500x500 px; lead is centered horizontally and slightly above center
+  const FORMATION_SCALE = 0.55; // 1 world unit = 0.55 px
+  const FORMATION_BOX_W = 500, FORMATION_BOX_H = 500;
   const FORMATION_CX = FORMATION_BOX_W / 2;
-  const FORMATION_CY = FORMATION_BOX_H / 2 - 40;
+  const FORMATION_CY = FORMATION_BOX_H / 2 - 60;
 
   function worldToBox(off) {
     return { x: FORMATION_CX + off.dx * FORMATION_SCALE,
