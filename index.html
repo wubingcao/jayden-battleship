@@ -351,7 +351,9 @@
     <p>You command a WWII destroyer. Sink enemy ships, return to port, and upgrade your fleet.</p>
     <p style="margin-top:14px;"><b>WASD / Arrows</b> sail &nbsp; <b>Mouse</b> aim &nbsp; <b>Click / Space</b> fire &nbsp; <b>T</b> auto-fire &nbsp; <b>P</b> pause</p>
     <p style="font-size:13px;color:#8aa6c4;">Sandbox mode: open ocean. Defeat the wave, then sail back to port to repair and resupply.</p>
-    <button id="startBtn">Set Sail</button>
+    <div id="saveStatus" style="font-size:13px;color:#9bd1ff;margin:6px 0;min-height:18px;"></div>
+    <button id="continueBtn" style="display:none;background:#1a4f1a;border-color:#3a9a3a;font-size:17px;">&#9654; Continue Command</button>
+    <button id="startBtn">New Deployment</button>
   </div>
 
   <div id="shop">
@@ -374,6 +376,7 @@
       <div class="shopGrid" id="shopGridBattles"></div>
     </div>
     <button id="nextWaveBtn" style="margin-top:14px;">Set Sail &mdash; Engage Next Wave</button>
+    <button id="deleteSaveBtn" style="margin-top:5px;font-size:12px;background:rgba(70,10,10,0.7);border-color:#6a2a2a;padding:5px 16px;">&#x1F5D1; Erase Saved Progress</button>
   </div>
 
   <div class="keyHint">WASD/Arrows move &middot; Mouse aim &middot; Click/Space fire &middot; T auto-fire &middot; P pause</div>
@@ -403,8 +406,10 @@
   const shopWave = document.getElementById('shopWave');
   const nextWaveBtn = document.getElementById('nextWaveBtn');
   const banner   = document.getElementById('banner');
-  const portCompass = document.getElementById('portCompass');
-  const portDist = document.getElementById('portDist');
+  const portCompass  = document.getElementById('portCompass');
+  const portDist     = document.getElementById('portDist');
+  const continueBtn  = document.getElementById('continueBtn');
+  const saveStatus   = document.getElementById('saveStatus');
 
   // ---- input ----
   const keys = {};
@@ -644,7 +649,7 @@
 
   const FLEET_MAX = 10;
 
-  let player, enemies, bullets, particles, escorts, pickups, aircraft = [];
+  let player, enemies, bullets, particles, escorts, pickups, aircraft = [], torpedoes = [];
   const camera = { x: 0, y: 0 };
 
   function rebuildPlayer(preserveHpFrac) {
@@ -682,7 +687,7 @@
     player = makeShip(DOCK.x + DOCK.w*0.5, DOCK.y + DOCK.h*0.6, 'player');
     if (fullReset) player.name = 'USS Fletcher';
     rebuildPlayer(false);
-    enemies = []; bullets = []; particles = []; pickups = []; aircraft = [];
+    enemies = []; bullets = []; particles = []; pickups = []; aircraft = []; torpedoes = [];
     escorts = [];
     spawnEmplacements();
     if (fullReset) {
@@ -983,6 +988,7 @@
   }
 
   function openShop() {
+    saveGame(); // auto-save every time you dock at port
     shopCoins.textContent = state.coins;
     shopWave.textContent = state.wave;
     shopFleetCount.textContent = `${escorts.length}/${FLEET_MAX}`;
@@ -1226,6 +1232,168 @@
     }
   }
 
+  // ---- save / load (localStorage) ----
+  const SAVE_KEY = 'battleship_save_v2';
+
+  function saveGame() {
+    const data = {
+      v: 2,
+      coins: state.coins, wave: state.wave, score: state.score,
+      upgradeLevels: { ...upgradeLevels },
+      leadClass,
+      playerName: player ? player.name : 'USS Fletcher',
+      escorts: escorts.map(e => ({ class: e.class, name: e.name, customOffset: e.customOffset || null })),
+      purchaseCounts: { ...purchaseCounts },
+      battlesWon: [...battlesWon],
+      queuedBattleId: queuedBattle ? queuedBattle.id : null,
+    };
+    try { localStorage.setItem(SAVE_KEY, JSON.stringify(data)); } catch(e) {}
+  }
+
+  function hasSave() {
+    try { const r = localStorage.getItem(SAVE_KEY); if (!r) return false; JSON.parse(r); return true; }
+    catch(e) { return false; }
+  }
+  function deleteSave() { localStorage.removeItem(SAVE_KEY); }
+
+  function loadGame() {
+    const raw = localStorage.getItem(SAVE_KEY);
+    if (!raw) return false;
+    try {
+      const data = JSON.parse(raw);
+      state.coins = data.coins || 0;
+      state.wave  = Math.max(1, data.wave || 1);
+      state.score = data.score || 0;
+      leadClass   = (data.leadClass in SHIP_CLASSES) ? data.leadClass : 'fletcher';
+      const ul = data.upgradeLevels || {};
+      Object.keys(upgradeLevels).forEach(k => { upgradeLevels[k] = ul[k] || 0; });
+      player = makeShip(DOCK.x + DOCK.w*0.5, DOCK.y + DOCK.h*0.6, 'player');
+      player.name = data.playerName || 'USS Fletcher';
+      rebuildPlayer(false);
+      escorts = (data.escorts || []).map(ed => {
+        if (!ed.class || !(ed.class in SHIP_CLASSES)) return null;
+        const ship = makeEscortShipWithName(ed.class, ed.name || classNamePools[ed.class]());
+        if (ed.customOffset) ship.customOffset = ed.customOffset;
+        return ship;
+      }).filter(Boolean);
+      const pc = data.purchaseCounts || {};
+      Object.keys(pc).forEach(k => { purchaseCounts[k] = pc[k]; });
+      battlesWon.clear();
+      (data.battlesWon || []).forEach(id => battlesWon.add(id));
+      queuedBattle = data.queuedBattleId
+        ? (BATTLES.find(b => b.id === data.queuedBattleId) || null) : null;
+      return true;
+    } catch(e) { console.warn('Save load failed:', e); return false; }
+  }
+
+  function updateSaveStatusUI() {
+    if (!continueBtn || !saveStatus) return;
+    if (hasSave()) {
+      try {
+        const data = JSON.parse(localStorage.getItem(SAVE_KEY));
+        const ships = 1 + (data.escorts || []).length;
+        saveStatus.textContent = `Saved: Wave ${data.wave} · ◉ ${data.coins} coins · ${ships} ships`;
+        continueBtn.style.display = '';
+      } catch(e) { continueBtn.style.display = 'none'; saveStatus.textContent = ''; }
+    } else {
+      continueBtn.style.display = 'none';
+      saveStatus.textContent = '';
+    }
+  }
+
+  // ---- torpedoes ----
+  function fireTorpedo(shooter, tx, ty) {
+    const ang = Math.atan2(ty - shooter.y, tx - shooter.x) + (Math.random()-0.5)*0.18;
+    torpedoes.push({
+      x: shooter.x + Math.cos(ang)*shooter.len*0.45,
+      y: shooter.y + Math.sin(ang)*shooter.len*0.45,
+      vx: Math.cos(ang)*3.8, vy: Math.sin(ang)*3.8,
+      ang, life: 270, dmg: 55,
+    });
+  }
+
+  function updateTorpedoes(dt) {
+    for (const t of torpedoes) {
+      t.x += t.vx; t.y += t.vy;
+      t.life -= 1;
+      if (t.x < -40 || t.y < -40 || t.x > WORLD_W+40 || t.y > WORLD_H+40) { t.life = 0; continue; }
+      // torpedo wake
+      if (Math.random() < 0.65) {
+        particles.push({
+          x: t.x - Math.cos(t.ang)*8, y: t.y - Math.sin(t.ang)*8,
+          vx: (Math.random()-0.5)*0.4, vy: (Math.random()-0.5)*0.4,
+          life: 24, max: 24, color: '#a8e0f8', size: 5,
+        });
+      }
+      // check player
+      const pr = (player.len + player.wid)*0.28;
+      if (dist2(t, player) < pr*pr) {
+        applyDamageToPlayer(t.dmg);
+        spawnExplosion(t.x, t.y, '#ff7700', true);
+        showBanner('TORPEDO HIT! Flooding report!', 2000);
+        t.life = 0; continue;
+      }
+      // check escorts
+      for (const f of escorts) {
+        if (f.hp <= 0) continue;
+        const fr = (f.len + f.wid)*0.28;
+        if (dist2(t, f) < fr*fr) {
+          f.hp -= t.dmg;
+          spawnExplosion(t.x, t.y, '#ff7700', true);
+          showBanner(`Torpedo struck ${f.name}!`, 1800);
+          t.life = 0; break;
+        }
+      }
+    }
+    for (let i = torpedoes.length-1; i >= 0; i--) if (torpedoes[i].life <= 0) torpedoes.splice(i,1);
+  }
+
+  function drawTorpedo(t) {
+    ctx.save();
+    ctx.translate(t.x, t.y);
+    ctx.rotate(t.ang);
+    ctx.fillStyle = '#778899';
+    ctx.beginPath(); ctx.ellipse(0, 0, 11, 3, 0, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#cc3322';
+    ctx.beginPath(); ctx.arc(10, 0, 3, 0, Math.PI*2); ctx.fill();
+    // propeller blur at tail
+    ctx.fillStyle = 'rgba(180,220,240,0.55)';
+    ctx.beginPath(); ctx.ellipse(-10, 0, 4, 5, 0, 0, Math.PI*2); ctx.fill();
+    ctx.restore();
+  }
+
+  // ---- damage smoke / fire ----
+  function emitDamageSmoke(ship) {
+    if (!ship || ship.hp <= 0 || ship.hp >= ship.hpMax) return;
+    const frac = ship.hp / ship.hpMax;
+    const chance = frac < 0.3 ? 0.6 : frac < 0.6 ? 0.25 : 0.06;
+    if (Math.random() > chance) return;
+    const ox = (Math.random()-0.5) * ship.wid;
+    const oy = (Math.random()-0.5) * ship.wid;
+    particles.push({
+      x: ship.x + ox, y: ship.y + oy,
+      vx: (Math.random()-0.5)*0.35, vy: -0.55 - Math.random()*0.45,
+      life: 52, max: 52,
+      color: frac < 0.3 ? '#dd3311' : '#282828',
+      size: 9 + Math.random() * (ship.len * 0.07),
+      smoke: true,
+    });
+  }
+
+  // ---- funnel smoke (cosmetic, always on) ----
+  function emitFunnelSmoke(ship) {
+    if (!ship || Math.random() > 0.11) return;
+    const spd = Math.hypot(ship.vx || 0, ship.vy || 0);
+    if (spd < 0.15) return; // only when underway
+    const fx = ship.x - Math.cos(ship.ang) * ship.len * 0.13;
+    const fy = ship.y - Math.sin(ship.ang) * ship.len * 0.13;
+    particles.push({
+      x: fx + (Math.random()-0.5)*2, y: fy + (Math.random()-0.5)*2,
+      vx: (Math.random()-0.5)*0.25, vy: -0.38 - Math.random()*0.22,
+      life: 60, max: 60, color: '#3c3c3c', size: 8 + Math.random()*3, smoke: true,
+    });
+  }
+
   // ---- main loop ----
   let last = performance.now();
   function loop(now) {
@@ -1254,9 +1422,15 @@
     updateEnemies(dt);
     updateEmplacements(dt);
     updateAircraft(dt);
+    updateTorpedoes(dt);
     updateBullets(dt);
     updatePickups(dt);
     updateParticles(dt);
+    // damage smoke + funnel smoke for all ships
+    emitDamageSmoke(player);
+    emitFunnelSmoke(player);
+    for (const e of escorts)  { emitDamageSmoke(e); emitFunnelSmoke(e); }
+    for (const en of enemies) { emitDamageSmoke(en); }
 
     // camera follows
     const targetCx = clamp(player.x - VIEW_W/2, 0, WORLD_W - VIEW_W);
@@ -1307,11 +1481,14 @@
     if (keys['s'] || keys['arrowdown'])  ay += 1;
     if (keys['a'] || keys['arrowleft'])  ax -= 1;
     if (keys['d'] || keys['arrowright']) ax += 1;
+    // damage-control speed penalty: flooding slows the ship
+    const hpFracP = player.hpMax > 0 ? player.hp / player.hpMax : 1;
+    const effSpeedP = player.speed * (hpFracP < 0.3 ? 0.42 : hpFracP < 0.6 ? 0.72 : 1.0);
     const mag = Math.hypot(ax, ay);
     if (mag > 0) {
       ax /= mag; ay /= mag;
-      player.vx += ax * player.speed * 0.4;
-      player.vy += ay * player.speed * 0.4;
+      player.vx += ax * effSpeedP * 0.4;
+      player.vy += ay * effSpeedP * 0.4;
       const moveAng = Math.atan2(ay, ax);
       const d = angDiff(moveAng, player.ang);
       player.ang += clamp(d, -3*dt, 3*dt);
@@ -1319,7 +1496,7 @@
     player.vx *= 0.94;
     player.vy *= 0.94;
     const sp = Math.hypot(player.vx, player.vy);
-    if (sp > player.speed) { player.vx *= player.speed/sp; player.vy *= player.speed/sp; }
+    if (sp > effSpeedP) { player.vx *= effSpeedP/sp; player.vy *= effSpeedP/sp; }
     let nx = player.x + player.vx;
     let ny = player.y + player.vy;
     // block from running over land
@@ -1567,11 +1744,13 @@
         const tx = -mvy, ty = mvx;
         mvx = tx; mvy = ty;
       }
-      en.vx += mvx * en.speed * 0.05;
-      en.vy += mvy * en.speed * 0.05;
+      // speed drops to 50% when heavily damaged (flooding)
+      const enEff = en.hp / en.hpMax < 0.3 ? en.speed * 0.5 : en.speed;
+      en.vx += mvx * enEff * 0.05;
+      en.vy += mvy * enEff * 0.05;
       en.vx *= 0.95; en.vy *= 0.95;
       const sp = Math.hypot(en.vx, en.vy);
-      if (sp > en.speed) { en.vx *= en.speed/sp; en.vy *= en.speed/sp; }
+      if (sp > enEff) { en.vx *= enEff/sp; en.vy *= enEff/sp; }
       en.x += en.vx; en.y += en.vy;
 
       const targetAng = Math.atan2(dy, dx);
@@ -1579,6 +1758,18 @@
       en.ang += clamp(diff, -1.5*dt, 1.5*dt);
 
       if (Math.random() < 0.35) spawnWake(en);
+
+      // torpedo attacks for destroyers and cruisers
+      if (en.kind === 'destroyer' || en.kind === 'cruiser') {
+        en.torpCd = (en.torpCd ?? (4 + Math.random()*5)) - dt;
+        if (en.torpCd <= 0 && d < 420) {
+          // lead the player position slightly
+          fireTorpedo(en, player.x + player.vx*28, player.y + player.vy*28);
+          en.torpCd = 8 + Math.random()*5;
+          // muzzle flash
+          particles.push({ x: en.x, y: en.y, vx: 0, vy: 0, life: 9, max: 9, color: '#ffaa44', size: 9 });
+        }
+      }
 
       en.fireCd -= dt * en.fire;
       if (en.fireCd <= 0 && d < en.range) {
@@ -1725,12 +1916,18 @@
     for (const en of enemies) drawShip(en.x, en.y, en.ang, en.color, en.len, en.wid, en.barrel, en.hp / en.hpMax, false, true, en.name);
 
     for (const b of bullets) {
-      ctx.fillStyle = b.color;
+      ctx.save();
+      ctx.strokeStyle = b.color;
+      ctx.lineWidth = 2.5;
+      ctx.lineCap = 'round';
       ctx.beginPath();
-      ctx.arc(b.x, b.y, 2.6, 0, Math.PI*2);
-      ctx.fill();
+      ctx.moveTo(b.x, b.y);
+      ctx.lineTo(b.x - b.vx * 4, b.y - b.vy * 4);
+      ctx.stroke();
+      ctx.restore();
     }
 
+    for (const t of torpedoes) drawTorpedo(t);
     for (const a of aircraft) drawAircraft(a);
 
     if (state.running && !state.paused) {
@@ -1763,12 +1960,19 @@
   }
 
   function drawSeaScreen() {
+    // sea darkens slightly in later waves (stormier conditions)
+    const stormF = state.running ? Math.min(1, (state.wave - 1) / 16) : 0;
+    const deep1 = stormF > 0 ? `hsl(210,${72-stormF*30}%,${18-stormF*6}%)` : '#0c2a4a';
+    const deep2 = stormF > 0 ? `hsl(210,${65-stormF*30}%,${13-stormF*5}%)` : '#072037';
     const g = ctx.createLinearGradient(0,0,0,VIEW_H);
-    g.addColorStop(0, '#0c2a4a');
-    g.addColorStop(1, '#072037');
+    g.addColorStop(0, deep1);
+    g.addColorStop(1, deep2);
     ctx.fillStyle = g;
     ctx.fillRect(0,0,VIEW_W,VIEW_H);
-    ctx.strokeStyle = 'rgba(120, 170, 220, 0.06)';
+    // animated wave lines (more agitated in later waves)
+    const waveAmp = 4 + stormF * 5;
+    const waveFreq = 0.04 - stormF * 0.008;
+    ctx.strokeStyle = `rgba(120,170,220,${0.06 + stormF * 0.04})`;
     ctx.lineWidth = 1;
     for (let y = 0; y < VIEW_H; y += 14) {
       ctx.beginPath();
@@ -1776,9 +1980,14 @@
       const wy = y + camera.y;
       for (let x = 0; x <= VIEW_W; x += 30) {
         const wx = x + camera.x;
-        ctx.lineTo(x, y + Math.sin((wx + wy + seaT)*0.04) * 4);
+        ctx.lineTo(x, y + Math.sin((wx + wy + seaT)*waveFreq) * waveAmp);
       }
       ctx.stroke();
+    }
+    // storm darkness overlay
+    if (stormF > 0) {
+      ctx.fillStyle = `rgba(3,8,18,${stormF * 0.22})`;
+      ctx.fillRect(0,0,VIEW_W,VIEW_H);
     }
   }
 
@@ -2017,10 +2226,18 @@
   }
 
   function drawParticle(p) {
-    const a = clamp(p.life / p.max, 0, 1);
-    ctx.globalAlpha = a;
-    ctx.fillStyle = p.color;
-    ctx.fillRect(p.x - p.size/2, p.y - p.size/2, p.size, p.size);
+    const frac = clamp(p.life / (p.max || p.life || 1), 0, 1);
+    if (p.smoke) {
+      // smoke: fades in then out, expands as it billows upward
+      ctx.globalAlpha = Math.sin((1 - frac) * Math.PI) * 0.50;
+      ctx.fillStyle = p.color;
+      const r = (p.size * 0.5) * (0.25 + (1 - frac) * 0.75);
+      ctx.beginPath(); ctx.arc(p.x, p.y, Math.max(0.5, r), 0, Math.PI*2); ctx.fill();
+    } else {
+      ctx.globalAlpha = frac;
+      ctx.fillStyle = p.color;
+      ctx.fillRect(p.x - p.size/2, p.y - p.size/2, p.size, p.size);
+    }
     ctx.globalAlpha = 1;
   }
 
@@ -2070,15 +2287,17 @@
     const ps = overlay.querySelectorAll('p');
     ps[0].textContent = `Survived ${state.wave} wave(s)`;
     ps[1].textContent = `Final score: ${state.score}  ·  ${state.coins} coins remaining`;
-    ps[2].textContent = 'Press Set Sail to launch a new destroyer.';
+    ps[2].textContent = 'Your last port save is still available — continue from there or start fresh.';
     ps[3].textContent = '';
-    startBtn.textContent = 'Set Sail Again';
+    startBtn.textContent = 'New Deployment';
     hud.style.display = 'none';
     portCompass.classList.remove('show');
     hideBanner();
+    updateSaveStatusUI(); // show Continue button if a save exists
   }
 
   startBtn.onclick = () => {
+    deleteSave(); // new deployment wipes old save
     overlay.style.display = 'none';
     hud.style.display = 'flex';
     overlay.querySelector('h1').textContent = 'BATTLESHIP';
@@ -2095,7 +2314,42 @@
     startWave();
   };
 
+  if (continueBtn) {
+    continueBtn.onclick = () => {
+      if (!loadGame()) { alert('Could not load saved game. Starting new deployment.'); return; }
+      enemies = []; bullets = []; particles = []; pickups = []; aircraft = []; torpedoes = [];
+      sunkThisWave = [];
+      spawnEmplacements();
+      camera.x = clamp(player.x - VIEW_W/2, 0, WORLD_W - VIEW_W);
+      camera.y = clamp(player.y - VIEW_H/2, 0, WORLD_H - VIEW_H);
+      state.phase = 'port';
+      state.running = true;
+      state.paused = false;
+      state.autoShoot = false;
+      overlay.style.display = 'none';
+      hud.style.display = 'flex';
+      const afState = document.getElementById('autoFireState');
+      if (afState) { afState.textContent = 'OFF'; afState.style.color = '#ff9a9a'; }
+      openShop();
+    };
+  }
+
+  const deleteSaveBtn = document.getElementById('deleteSaveBtn');
+  if (deleteSaveBtn) {
+    deleteSaveBtn.onclick = () => {
+      if (!confirm('Erase all saved progress? This cannot be undone.')) return;
+      deleteSave();
+      deleteSaveBtn.textContent = '✓ Save erased';
+      deleteSaveBtn.disabled = true;
+      setTimeout(() => {
+        deleteSaveBtn.textContent = '🗑 Erase Saved Progress';
+        deleteSaveBtn.disabled = false;
+      }, 3000);
+    };
+  }
+
   reset(true);
+  updateSaveStatusUI(); // show Continue button if a save exists on page load
   requestAnimationFrame(loop);
 })();
 </script>
