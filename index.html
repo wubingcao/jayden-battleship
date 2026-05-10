@@ -359,6 +359,7 @@
   <div id="shop">
     <h2>Naval Yard &mdash; Port Royal</h2>
     <p class="sub"><span class="coin">&#x25C9; <span id="shopCoins">0</span> coins</span> &nbsp; Wave <span id="shopWave">1</span> cleared! Fleet repaired and resupplied. &nbsp; Fleet: <span id="shopFleetCount">0</span></p>
+    <p id="shopSaveStatus" style="font-size:12px;color:#4ab14a;margin:0 0 4px;"></p>
     <div class="shopScroll">
       <div class="shopSectionTitle">Flagship &mdash; Choose Your Lead Ship</div>
       <div class="shopGrid" id="shopGridFlagship"></div>
@@ -989,6 +990,7 @@
 
   function openShop() {
     saveGame(); // auto-save every time you dock at port
+    updateSaveStatusUI();
     shopCoins.textContent = state.coins;
     shopWave.textContent = state.wave;
     shopFleetCount.textContent = `${escorts.length}/${FLEET_MAX}`;
@@ -1247,14 +1249,21 @@
       battlesWon: [...battlesWon],
       queuedBattleId: queuedBattle ? queuedBattle.id : null,
     };
-    try { localStorage.setItem(SAVE_KEY, JSON.stringify(data)); } catch(e) {}
+    try {
+      localStorage.setItem(SAVE_KEY, JSON.stringify(data));
+      const el = document.getElementById('shopSaveStatus');
+      if (el) { el.textContent = '✔ Game saved (Wave ' + data.wave + ')'; }
+    } catch(e) {
+      const el = document.getElementById('shopSaveStatus');
+      if (el) { el.textContent = '⚠ Could not save (storage unavailable).'; el.style.color = '#ffae3a'; }
+    }
   }
 
   function hasSave() {
     try { const r = localStorage.getItem(SAVE_KEY); if (!r) return false; JSON.parse(r); return true; }
     catch(e) { return false; }
   }
-  function deleteSave() { localStorage.removeItem(SAVE_KEY); }
+  function deleteSave() { try { localStorage.removeItem(SAVE_KEY); } catch(e) {} }
 
   function loadGame() {
     const raw = localStorage.getItem(SAVE_KEY);
@@ -1292,12 +1301,18 @@
       try {
         const data = JSON.parse(localStorage.getItem(SAVE_KEY));
         const ships = 1 + (data.escorts || []).length;
-        saveStatus.textContent = `Saved: Wave ${data.wave} · ◉ ${data.coins} coins · ${ships} ships`;
+        saveStatus.innerHTML = '&#128190; <b>Save found</b> &mdash; Wave ' + data.wave + ' &middot; ' + data.coins + ' coins &middot; ' + ships + ' ships';
+        saveStatus.style.color = '#9bd1ff';
         continueBtn.style.display = '';
-      } catch(e) { continueBtn.style.display = 'none'; saveStatus.textContent = ''; }
+      } catch(e) {
+        continueBtn.style.display = 'none';
+        saveStatus.textContent = 'Auto-saves when you dock at port.';
+        saveStatus.style.color = '#6a8aa8';
+      }
     } else {
       continueBtn.style.display = 'none';
-      saveStatus.textContent = '';
+      saveStatus.innerHTML = '&#128190; No save on file &mdash; game auto-saves when you dock at port.';
+      saveStatus.style.color = '#6a8aa8';
     }
   }
 
@@ -2285,34 +2300,34 @@
     overlay.querySelector('h1').textContent = 'SUNK';
     overlay.querySelector('h1').style.color = '#ff6a6a';
     const ps = overlay.querySelectorAll('p');
-    ps[0].textContent = `Survived ${state.wave} wave(s)`;
-    ps[1].textContent = `Final score: ${state.score}  ·  ${state.coins} coins remaining`;
-    ps[2].textContent = 'Your last port save is still available — continue from there or start fresh.';
+    ps[0].textContent = 'Survived ' + state.wave + ' wave(s)  ·  Score: ' + state.score;
+    ps[1].textContent = 'Coins remaining: ' + state.coins;
+    ps[2].textContent = 'Start fresh or load your last port save below.';
     ps[3].textContent = '';
     startBtn.textContent = 'New Deployment';
     hud.style.display = 'none';
     portCompass.classList.remove('show');
     hideBanner();
-    updateSaveStatusUI(); // show Continue button if a save exists
+    updateSaveStatusUI();
   }
 
-  startBtn.onclick = () => {
-    deleteSave(); // new deployment wipes old save
-    overlay.style.display = 'none';
-    hud.style.display = 'flex';
-    overlay.querySelector('h1').textContent = 'BATTLESHIP';
-    overlay.querySelector('h1').style.color = '#ffd56a';
+  function startNewDeployment() {
+    deleteSave();
     Object.keys(purchaseCounts).forEach(k => delete purchaseCounts[k]);
     battlesWon.clear();
     queuedBattle = null;
     state.autoShoot = false;
     const afState = document.getElementById('autoFireState');
     if (afState) { afState.textContent = 'OFF'; afState.style.color = '#ff9a9a'; }
+    overlay.style.display = 'none';
+    hud.style.display = 'flex';
     reset(true);
     state.running = true;
     state.paused = false;
     startWave();
-  };
+  }
+
+  startBtn.onclick = startNewDeployment;
 
   if (continueBtn) {
     continueBtn.onclick = () => {
