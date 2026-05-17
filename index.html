@@ -753,24 +753,15 @@
     return null;
   }
 
-  function spawnEnemy(kind) {
-    // spawn far from port — south or east edge mostly
-    let x, y, tries = 0;
-    do {
-      const side = Math.floor(Math.random() * 3);
-      if (side === 0)      { x = Math.random()*WORLD_W; y = WORLD_H + 40; } // south
-      else if (side === 1) { x = WORLD_W + 40; y = Math.random()*WORLD_H; } // east
-      else                 { x = -40; y = 400 + Math.random()*(WORLD_H-400); } // west, below port
-      tries++;
-    } while (tries < 6 && pointInPort(x, y));
+  const ENEMY_TYPES = {
+    patrol:    { hp: 30,  len: 40, wid: 12, speed: 1.4, dmg: 10, fire: 1.4, range: 320, color: '#7e8a99', barrel: 1, value: 8,  score: 50 },
+    destroyer: { hp: 70,  len: 56, wid: 16, speed: 1.1, dmg: 18, fire: 1.0, range: 380, color: '#5a7a99', barrel: 2, value: 18, score: 120 },
+    cruiser:   { hp: 130, len: 70, wid: 20, speed: 0.85,dmg: 24, fire: 0.7, range: 460, color: '#5a5a99', barrel: 2, value: 35, score: 240 },
+    battleship:{ hp: 240, len: 90, wid: 26, speed: 0.65,dmg: 32, fire: 0.55,range: 520, color: '#6a4a4a', barrel: 3, value: 80, score: 600 },
+  };
 
-    const types = {
-      patrol:    { hp: 30,  len: 40, wid: 12, speed: 1.4, dmg: 10, fire: 1.4, range: 320, color: '#7e8a99', barrel: 1, value: 8,  score: 50 },
-      destroyer: { hp: 70,  len: 56, wid: 16, speed: 1.1, dmg: 18, fire: 1.0, range: 380, color: '#5a7a99', barrel: 2, value: 18, score: 120 },
-      cruiser:   { hp: 130, len: 70, wid: 20, speed: 0.85,dmg: 24, fire: 0.7, range: 460, color: '#5a5a99', barrel: 2, value: 35, score: 240 },
-      battleship:{ hp: 240, len: 90, wid: 26, speed: 0.65,dmg: 32, fire: 0.55,range: 520, color: '#6a4a4a', barrel: 3, value: 80, score: 600 },
-    };
-    const t = types[kind];
+  function spawnEnemyAt(kind, x, y) {
+    const t = ENEMY_TYPES[kind];
     enemies.push({
       x, y, ang: Math.atan2(player.y - y, player.x - x),
       vx: 0, vy: 0,
@@ -785,12 +776,69 @@
     });
   }
 
+  function spawnFleet(fleet) {
+    // Pick a random spawn edge (south, east, or west — never north/port side)
+    const side = Math.floor(Math.random() * 3);
+    let baseX, baseY;
+    if (side === 0) {        // south
+      baseX = 300 + Math.random() * (WORLD_W - 600);
+      baseY = WORLD_H + 50;
+    } else if (side === 1) { // east
+      baseX = WORLD_W + 50;
+      baseY = 500 + Math.random() * (WORLD_H - 700);
+    } else {                 // west, below port
+      baseX = -50;
+      baseY = 500 + Math.random() * (WORLD_H - 700);
+    }
+    // Spread ships in a line perpendicular to approach, with a staggered depth
+    const n = fleet.length;
+    const spacing = 80; // px between ships in the line
+    fleet.forEach((kind, idx) => {
+      const off = (idx - (n - 1) / 2) * spacing;
+      const depth = (Math.random() - 0.5) * 60; // slight fore-aft stagger
+      let sx, sy;
+      if (side === 0) {      // south — spread east-west
+        sx = clamp(baseX + off, 100, WORLD_W - 100);
+        sy = baseY + depth;
+      } else {               // east / west — spread north-south
+        sx = baseX + depth;
+        sy = clamp(baseY + off, 300, WORLD_H - 100);
+      }
+      spawnEnemyAt(kind, sx, sy);
+    });
+  }
+
+  // Group a flat list of ship kinds into task-force fleets of 2-4.
+  // Battleships always lead a fleet alone or with one escort.
+  function groupIntoFleets(composition) {
+    // Sort: battleships first so they get paired with escorts
+    const order = { battleship: 0, cruiser: 1, destroyer: 2, patrol: 3 };
+    const sorted = composition.slice().sort((a, b) => order[a] - order[b]);
+    const fleets = [];
+    let i = 0;
+    while (i < sorted.length) {
+      let size;
+      if (sorted[i] === 'battleship') {
+        // Battleship task force: BB + up to 2 escorts behind it
+        size = Math.min(1 + Math.floor(Math.random() * 3), sorted.length - i);
+      } else if (sorted[i] === 'cruiser') {
+        size = Math.min(2 + Math.floor(Math.random() * 2), sorted.length - i);
+      } else {
+        // destroyers / patrols — packs of 2-4
+        size = Math.min(2 + Math.floor(Math.random() * 3), sorted.length - i);
+      }
+      fleets.push(sorted.slice(i, i + size));
+      i += size;
+    }
+    return fleets;
+  }
+
   function startWave() {
     state.phase = 'wave';
     if (queuedBattle) {
       const b = queuedBattle;
-      state.spawnQueue = b.composition.slice();
-      state.spawnCooldown = 1.5;
+      state.spawnQueue = groupIntoFleets(b.composition.slice());
+      state.spawnCooldown = 2.0;
       state.activeBattle = b;
       queuedBattle = null;
       showBanner(`${b.name} &mdash; ${b.year} &mdash; engage!`, 4500);
@@ -804,9 +852,10 @@
     if (w >= 4) composition.push(...Array(Math.floor((w-3) * 0.6)).fill('cruiser'));
     if (w >= 6 && w % 2 === 0) composition.push('battleship');
     if (w >= 8) composition.push('battleship');
-    state.spawnQueue = composition;
-    state.spawnCooldown = 1.2;
-    showBanner(`Wave ${w} &mdash; ${composition.length} hostile contacts inbound`, 2500);
+    const fleets = groupIntoFleets(composition);
+    state.spawnQueue = fleets;
+    state.spawnCooldown = 1.5;
+    showBanner(`Wave ${w} &mdash; ${fleets.length} enemy fleet${fleets.length > 1 ? 's' : ''} (${composition.length} ships) inbound`, 3000);
   }
 
   function endWave() {
@@ -1424,8 +1473,9 @@
     if (state.phase === 'wave' && state.spawnQueue && state.spawnQueue.length) {
       state.spawnCooldown -= dt;
       if (state.spawnCooldown <= 0) {
-        spawnEnemy(state.spawnQueue.shift());
-        state.spawnCooldown = 0.8 + Math.random()*0.7;
+        spawnFleet(state.spawnQueue.shift());
+        // longer gap between fleets — ramps up slightly with wave number
+        state.spawnCooldown = 4.0 + Math.random() * 3.0 - Math.min(state.wave * 0.15, 1.5);
       }
     }
     if (state.phase === 'wave' && state.spawnQueue && state.spawnQueue.length === 0 && enemies.length === 0) {
